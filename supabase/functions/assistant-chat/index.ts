@@ -6,7 +6,6 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Respond to preflight requests instantly
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -40,7 +39,19 @@ serve(async (req) => {
       })
     })
 
-    // Establish streamed response pipe
+    // If Anthropic returned an error (e.g. invalid key, quota exceeded)
+    if (!anthropicResponse.ok) {
+      const errText = await anthropicResponse.text()
+      console.error('Anthropic API Error:', errText)
+      return new Response(`Anthropic API Error: ${errText}`, {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'text/plain',
+        }
+      })
+    }
+
     const { readable, writable } = new TransformStream()
     const writer = writable.getWriter()
     const reader = anthropicResponse.body?.getReader()
@@ -51,7 +62,6 @@ serve(async (req) => {
       throw new Error('No readable body returned from Anthropic stream channel.')
     }
 
-    // Stream processor
     (async () => {
       try {
         while (true) {
@@ -70,7 +80,7 @@ serve(async (req) => {
                 await writer.write(encoder.encode(parsed.delta.text))
               }
             } catch (e) {
-              // Ignore split delta JSON packet boundaries
+              // Ignore partial chunk parsing errors
             }
           }
         }

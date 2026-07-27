@@ -195,7 +195,15 @@ export default function Layout() {
         })
       })
 
-      if (!response.ok || response.status === 404) {
+      if (!response.ok) {
+        if (response.status === 400 || response.status === 500) {
+          const errText = await response.text()
+          if (errText.includes('Anthropic') || errText.includes('secret') || errText.includes('API')) {
+            setIsTyping(false)
+            setMessages(prev => [...prev, { id: botMsgId, sender: 'bot', text: errText }])
+            return
+          }
+        }
         throw new Error('Supabase Edge Function not reachable.')
       }
 
