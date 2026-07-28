@@ -542,7 +542,7 @@ export default function Inventory() {
       {/* Add Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-850 rounded-2xl p-5 shadow-2xl space-y-4 relative">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-850 rounded-2xl p-5 shadow-2xl space-y-4 relative max-h-[90vh] overflow-y-auto">
             <button onClick={() => setShowAddModal(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white p-1 rounded-lg">
               <X className="w-5 h-5" />
             </button>
@@ -560,7 +560,7 @@ export default function Inventory() {
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="e.g. fresh bread loaf"
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white"
+                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
                 />
               </div>
 
@@ -576,7 +576,7 @@ export default function Inventory() {
                   value={newSku}
                   onChange={(e) => setNewSku(e.target.value)}
                   placeholder="e.g. 13-digit EAN code"
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white"
+                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
                 />
               </div>
 
@@ -590,7 +590,7 @@ export default function Inventory() {
                     value={newPrice}
                     onChange={(e) => setNewPrice(e.target.value)}
                     placeholder="0.00"
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
                   />
                 </div>
                 <div className="space-y-1">
@@ -602,7 +602,7 @@ export default function Inventory() {
                     value={newCost}
                     onChange={(e) => setNewCost(e.target.value)}
                     placeholder="0.00"
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
                   />
                 </div>
               </div>
@@ -616,7 +616,7 @@ export default function Inventory() {
                     value={newStock}
                     onChange={(e) => setNewStock(e.target.value)}
                     placeholder="50"
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-2 text-white"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-2 text-white min-h-[48px]"
                   />
                 </div>
                 <div className="space-y-1">
@@ -627,7 +627,7 @@ export default function Inventory() {
                     value={newMinStock}
                     onChange={(e) => setNewMinStock(e.target.value)}
                     placeholder="10"
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-2 text-white"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-2 text-white min-h-[48px]"
                   />
                 </div>
                 <div className="space-y-1">
@@ -638,7 +638,7 @@ export default function Inventory() {
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value)}
                     placeholder="General"
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-2 text-white"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-2 text-white min-h-[48px]"
                   />
                 </div>
               </div>
@@ -647,13 +647,13 @@ export default function Inventory() {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="flex-1 bg-slate-900 hover:bg-slate-850 text-gray-300 py-2 rounded-lg font-bold"
+                  className="flex-1 bg-slate-900 hover:bg-slate-850 text-gray-300 py-2 rounded-lg font-bold min-h-[48px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-505 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-1.5"
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-505 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 min-h-[48px]"
                 >
                   Save Product <Sparkles className="w-4 h-4" />
                 </button>
@@ -666,7 +666,7 @@ export default function Inventory() {
       {/* Restock Modal */}
       {showRestockModal && targetProduct && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-850 rounded-2xl p-5 shadow-2xl space-y-4 relative">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-850 rounded-2xl p-5 shadow-2xl space-y-4 relative max-h-[90vh] overflow-y-auto">
             <button onClick={() => setShowRestockModal(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white p-1 rounded-lg">
               <X className="w-5 h-5" />
             </button>
@@ -684,7 +684,7 @@ export default function Inventory() {
                   value={restockQty}
                   onChange={(e) => setRestockQty(e.target.value)}
                   placeholder="25"
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white"
+                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
                 />
               </div>
 
@@ -697,7 +697,7 @@ export default function Inventory() {
                   value={restockCost}
                   onChange={(e) => setRestockCost(e.target.value)}
                   placeholder="0.00"
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white"
+                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
                 />
               </div>
 
@@ -705,13 +705,13 @@ export default function Inventory() {
                 <button
                   type="button"
                   onClick={() => setShowRestockModal(false)}
-                  className="flex-1 bg-slate-900 hover:bg-slate-850 text-gray-300 py-2 rounded-lg font-bold"
+                  className="flex-1 bg-slate-900 hover:bg-slate-850 text-gray-300 py-2 rounded-lg font-bold min-h-[48px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-505 text-white py-2 rounded-lg font-bold"
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-505 text-white py-2 rounded-lg font-bold min-h-[48px]"
                 >
                   Confirm Restock
                 </button>
