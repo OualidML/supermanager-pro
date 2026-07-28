@@ -15,7 +15,8 @@ import {
   Layers,
   Sparkles,
   ArrowUpRight,
-  Volume2
+  Volume2,
+  Upload
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { BrowserMultiFormatReader } from '@zxing/browser'
@@ -362,6 +363,137 @@ export default function Inventory() {
     }
   }
 
+  // Handle CSV Bulk Import
+  const handleCSVImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setDbError(null)
+    setSuccessMsg('Parsing and importing CSV...')
+
+    try {
+      const reader = new FileReader()
+      reader.onload = async (event) => {
+        try {
+          const text = event.target?.result as string
+          if (!text) throw new Error('File is empty.')
+
+          const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0)
+          if (lines.length < 2) {
+            throw new Error('CSV must contain a header row and at least one data row.')
+          }
+
+          // Simple CSV line parser that respects quoted commas
+          const parseCSVLine = (line: string) => {
+            const result = []
+            let current = ''
+            let inQuotes = false
+            for (let i = 0; i < line.length; i++) {
+              const char = line[i]
+              if (char === '"') {
+                inQuotes = !inQuotes
+              } else if (char === ',' && !inQuotes) {
+                result.push(current.trim())
+                current = ''
+              } else {
+                current += char
+              }
+            }
+            result.push(current.trim())
+            return result
+          }
+
+          const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/["']/g, ''))
+          
+          // Map headers to column indexes
+          const nameIdx = headers.indexOf('name')
+          const skuIdx = headers.indexOf('sku') !== -1 ? headers.indexOf('sku') : headers.indexOf('barcode')
+          const priceIdx = headers.indexOf('price') !== -1 ? headers.indexOf('price') : headers.indexOf('selling_price')
+          const costIdx = headers.indexOf('cost') !== -1 ? headers.indexOf('cost') : headers.indexOf('cost_price')
+          const stockIdx = headers.indexOf('stock') !== -1 ? headers.indexOf('stock') : headers.indexOf('quantity')
+          const minStockIdx = headers.indexOf('min_stock') !== -1 ? headers.indexOf('min_stock') : headers.indexOf('min')
+          const categoryIdx = headers.indexOf('category')
+
+          if (nameIdx === -1 || priceIdx === -1 || costIdx === -1) {
+            throw new Error('CSV must contain at least "name", "price" (or "selling_price"), and "cost" (or "cost_price") columns.')
+          }
+
+          const { data: { user } } = await supabase.auth.getUser()
+          if (!user) throw new Error('No user session found.')
+
+          const productsToInsert = []
+          const rawInputs: { cost: number; stock: number }[] = []
+
+          for (let i = 1; i < lines.length; i++) {
+            const values = parseCSVLine(lines[i])
+            if (values.length < headers.length) continue
+
+            const name = values[nameIdx]?.replace(/["']/g, '')
+            if (!name) continue
+
+            const sku = skuIdx !== -1 ? values[skuIdx]?.replace(/["']/g, '') || null : null
+            const price = parseFloat(values[priceIdx]) || 0
+            const cost = parseFloat(values[costIdx]) || 0
+            const stock = stockIdx !== -1 ? parseInt(values[stockIdx]) || 0 : 0
+            const minStock = minStockIdx !== -1 ? parseInt(values[minStockIdx]) || 0 : 0
+            const category = categoryIdx !== -1 ? values[categoryIdx]?.replace(/["']/g, '') || 'General' : 'General'
+
+            productsToInsert.push({
+              owner_id: user.id,
+              name,
+              sku,
+              price,
+              stock,
+              min_stock: minStock,
+              category
+            })
+
+            // Keep track of cost metadata to insert into stock_inputs later
+            rawInputs.push({ cost, stock })
+          }
+
+          if (productsToInsert.length === 0) {
+            throw new Error('No valid product rows identified in the CSV file.')
+          }
+
+          // 1. Bulk insert products
+          const { data: insertedProds, error: prodErr } = await supabase
+            .from('products')
+            .insert(productsToInsert)
+            .select()
+
+          if (prodErr) throw prodErr
+
+          // 2. Bulk insert stock inputs (costs history)
+          if (insertedProds && insertedProds.length > 0) {
+            const costEntries = insertedProds.map((prod, index) => ({
+              owner_id: user.id,
+              product_id: prod.id,
+              quantity: rawInputs[index]?.stock || 0,
+              cost_price: rawInputs[index]?.cost || 0
+            }))
+
+            const { error: costErr } = await supabase
+              .from('stock_inputs')
+              .insert(costEntries)
+
+            if (costErr) throw costErr
+          }
+
+          setSuccessMsg(`Successfully imported ${productsToInsert.length} products!`)
+          fetchInventory()
+          setTimeout(() => setSuccessMsg(''), 3000)
+        } catch (err: any) {
+          setDbError(err.message || 'Failed to process CSV file contents.')
+          setSuccessMsg('')
+        }
+      }
+      reader.readAsText(file)
+    } catch (err: any) {
+      setDbError(err.message || 'Failed to read file.')
+      setSuccessMsg('')
+    }
+  }
+
   // client-side filter
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.includes(searchQuery)
@@ -383,12 +515,23 @@ export default function Inventory() {
           <p className="text-xs text-gray-400 font-medium">Add catalog items, monitor low-stock limits, and trace cost margins.</p>
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-indigo-600 hover:bg-indigo-505 text-white font-bold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-indigo-600/15 flex items-center justify-center gap-2 text-xs"
-        >
-          <Plus className="w-4 h-4" /> {t('inventory.btn_add')}
-        </button>
+        <div className="flex gap-2">
+          <label className="bg-slate-800 hover:bg-slate-750 text-gray-300 font-bold py-2.5 px-4 rounded-xl transition-all shadow-lg border border-slate-700 flex items-center justify-center gap-2 text-xs cursor-pointer min-h-[48px]">
+            <Upload className="w-4 h-4 text-indigo-400" /> Import CSV
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleCSVImport}
+              className="hidden"
+            />
+          </label>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="bg-indigo-600 hover:bg-indigo-505 text-white font-bold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-indigo-600/15 flex items-center justify-center gap-2 text-xs min-h-[48px]"
+          >
+            <Plus className="w-4 h-4" /> {t('inventory.btn_add')}
+          </button>
+        </div>
       </div>
 
       {successMsg && (
