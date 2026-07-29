@@ -235,18 +235,6 @@ export default function Login() {
           </button>
         </form>
 
-        {/* Mode Toggle Link */}
-        <div className="text-center pt-2">
-          <button
-            onClick={() => {
-              setIsSignUp(!isSignUp)
-              setError(null)
-            }}
-            className="text-xs text-indigo-400 hover:text-indigo-300 font-medium transition-all"
-          >
-            {isSignUp ? t('login.has_account') : t('login.no_account')}
-          </button>
-        </div>
       </div>
     </div>
   )
