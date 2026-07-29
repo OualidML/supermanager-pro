@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { BrowserMultiFormatReader } from '@zxing/browser'
+import { BarcodeFormat, DecodeHintType } from '@zxing/library'
 import { useTranslation } from 'react-i18next'
 
 interface ProductItem {
@@ -165,21 +166,25 @@ export default function Inventory() {
     if (!soundEnabled) return
     try {
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      if (ctx.state === 'suspended') {
+        ctx.resume()
+      }
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
 
       osc.connect(gain)
       gain.connect(ctx.destination)
 
-      osc.frequency.value = 950
+      osc.type = 'triangle'
+      osc.frequency.value = 1000 // 1000Hz clear frequency tone
       gain.gain.setValueAtTime(0, ctx.currentTime)
-      gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.02)
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15)
+      gain.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 0.05) // louder max volume 0.8
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25)
 
       osc.start(ctx.currentTime)
-      osc.stop(ctx.currentTime + 0.15)
+      osc.stop(ctx.currentTime + 0.25)
     } catch (e) {
-      console.warn(e)
+      console.warn('Beep synthesis failed:', e)
     }
   }
 
@@ -205,7 +210,16 @@ export default function Inventory() {
   // ZXing hook inside modal
   useEffect(() => {
     if (!isScanning) return
-    const codeReader = new BrowserMultiFormatReader()
+    const hints = new Map()
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E
+    ])
+    const codeReader = new BrowserMultiFormatReader(hints)
     let active = true
 
     const videoElement = document.getElementById('inventory-scanner-viewport') as HTMLVideoElement
