@@ -9,6 +9,7 @@ import Expenses from './pages/Expenses'
 import Reports from './pages/Reports'
 import Forecast from './pages/Forecast'
 import Settings from './pages/Settings'
+import Debts from './pages/Debts'
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/forecast" element={<Forecast />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/debts" element={<Debts />} />
         </Route>
 
         {/* Default Catch-all Routing */}

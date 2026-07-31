@@ -20,7 +20,8 @@ import {
   User,
   Bot,
   Sun,
-  Moon
+  Moon,
+  BookOpen
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabaseClient'
@@ -306,6 +307,7 @@ export default function Layout() {
   ]
 
   const moreItems = [
+    { name: t('nav.debts') || 'Credit Ledger', path: '/debts', icon: BookOpen, desc: 'Manage customer tabs and debts' },
     { name: t('nav.expenses'), path: '/expenses', icon: Landmark, desc: 'Log bills & operating costs' },
     { name: t('nav.forecast'), path: '/forecast', icon: BrainCircuit, desc: 'Stock prediction model' },
     { name: t('nav.settings'), path: '/settings', icon: Settings, desc: 'Manage credentials & API' },

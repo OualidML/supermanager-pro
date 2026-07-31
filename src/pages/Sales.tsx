@@ -12,7 +12,8 @@ import {
   Volume2,
   X,
   Sparkles,
-  ShoppingBag
+  ShoppingBag,
+  BookOpen
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { BrowserMultiFormatReader } from '@zxing/browser'
@@ -51,6 +52,13 @@ export default function Sales() {
   const [isScanning, setIsScanning] = useState(false)
   const [scanDeviceId, setScanDeviceId] = useState<string | null>(null)
   const [scanDevices, setScanDevices] = useState<MediaDeviceInfo[]>([])
+
+  // Credit Tab States
+  const [showCreditModal, setShowCreditModal] = useState(false)
+  const [creditCustomerName, setCreditCustomerName] = useState('')
+  const [creditCustomerPhone, setCreditCustomerPhone] = useState('')
+  const [creditDeposit, setCreditDeposit] = useState('')
+  const [creditLoading, setCreditLoading] = useState(false)
 
   useEffect(() => {
     fetchInitialData()
@@ -333,6 +341,74 @@ export default function Sales() {
     }
   }
 
+  // Credit sales checkout
+  const handleCreditCheckout = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!creditCustomerName.trim()) return
+    setCartError(null)
+    setCreditLoading(true)
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('No authenticated user session found.')
+
+      const totalVal = total
+      const depositVal = parseFloat(creditDeposit) || 0
+
+      // 1. Create text items summary
+      const summary = cart.map(item => `${item.quantity}x ${item.name} (${currency}${item.price.toFixed(2)})`).join(', ')
+
+      // 2. Insert into customer_debts table
+      const { error: debtErr } = await supabase
+        .from('customer_debts')
+        .insert([{
+          owner_id: user.id,
+          customer_name: creditCustomerName,
+          customer_phone: creditCustomerPhone || null,
+          items_summary: summary,
+          total_amount: totalVal,
+          amount_paid: depositVal,
+          status: depositVal >= totalVal ? 'paid' : depositVal > 0 ? 'partially_paid' : 'unpaid'
+        }])
+
+      if (debtErr) throw debtErr
+
+      // 3. Decrement stock inventory quantities
+      await Promise.all(cart.map(item => {
+        const nextStock = Math.max(0, item.stock - item.quantity)
+        return supabase
+          .from('products')
+          .update({ stock: nextStock })
+          .eq('id', item.id)
+      }))
+
+      // 4. Success cleanup
+      setCreditLoading(false)
+      setShowCreditModal(false)
+      setCreditCustomerName('')
+      setCreditCustomerPhone('')
+      setCreditDeposit('')
+      setSuccess(true)
+      clearCart()
+
+      // Dispatch Success Toast
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: 'Credit transaction logged successfully!', type: 'success' }
+      }))
+
+      // Reload products list cache
+      fetchInitialData()
+
+      setTimeout(() => {
+        setSuccess(false)
+      }, 2500)
+
+    } catch (err: any) {
+      setCreditLoading(false)
+      setCartError(err.message || 'An error occurred while saving your credit transaction.')
+    }
+  }
+
   const isRTL = i18n.language === 'ar'
 
   return (
@@ -521,23 +597,34 @@ export default function Sales() {
               <span className="font-mono text-indigo-400">{currency}{total.toFixed(2)}</span>
             </div>
 
-            <button
-              onClick={handleCheckout}
-              disabled={loading || cart.length === 0}
-              className="w-full bg-indigo-600 hover:bg-indigo-505 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-600/15 flex items-center justify-center gap-1.5 mt-2"
-            >
-              {loading ? (
-                <>
-                  <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Processing Checkout...</span>
-                </>
-              ) : (
-                <>
-                  <span>{t('sales.btn_checkout')}</span>
-                  <Sparkles className="w-4 h-4" />
-                </>
-              )}
-            </button>
+            <div className="flex gap-2.5 mt-2">
+              <button
+                type="button"
+                onClick={() => setShowCreditModal(true)}
+                disabled={loading || cart.length === 0}
+                className="flex-1 bg-slate-800 hover:bg-slate-750 border border-slate-700 disabled:opacity-50 text-gray-300 font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 text-xs min-h-[48px]"
+              >
+                <BookOpen className="w-4 h-4 text-indigo-400" /> On Credit
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCheckout}
+                disabled={loading || cart.length === 0}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-505 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-indigo-600/15 flex items-center justify-center gap-1.5 min-h-[48px] text-xs"
+              >
+                {loading ? (
+                  <>
+                    <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  </>
+                ) : (
+                  <>
+                    <span>{t('sales.btn_checkout')}</span>
+                    <Sparkles className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
         </div>
@@ -599,6 +686,97 @@ export default function Sales() {
               </div>
             )}
 
+          </div>
+        </div>
+      )}
+      {/* Credit Details Modal */}
+      {showCreditModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-850 rounded-2xl p-5 shadow-2xl space-y-4 relative max-h-[90vh] overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => setShowCreditModal(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-white p-1 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="font-bold text-white text-sm flex items-center gap-2 border-b border-slate-850 pb-2.5">
+              <BookOpen className="w-4.5 h-4.5 text-indigo-400" /> Record Store Credit Sale
+            </h3>
+
+            <form onSubmit={handleCreditCheckout} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="text-gray-400 font-semibold">Customer Name (Required)</label>
+                <input
+                  type="text"
+                  required
+                  value={creditCustomerName}
+                  onChange={(e) => setCreditCustomerName(e.target.value)}
+                  placeholder="e.g. John Doe"
+                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 font-semibold">Phone Number (Optional)</label>
+                <input
+                  type="tel"
+                  value={creditCustomerPhone}
+                  onChange={(e) => setCreditCustomerPhone(e.target.value)}
+                  placeholder="e.g. +1 555-0199"
+                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 font-semibold">Initial Cash Deposit (Optional)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={creditDeposit}
+                  onChange={(e) => setCreditDeposit(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
+                />
+              </div>
+
+              <div className="bg-slate-950/40 border border-slate-850 rounded-lg p-3 text-[11px] text-gray-400 space-y-1.5">
+                <div className="flex justify-between">
+                  <span>Cart Total:</span>
+                  <span className="font-mono text-white">{currency}{total.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Outstanding Debt:</span>
+                  <span className="font-mono text-rose-400">
+                    {currency}{(total - (parseFloat(creditDeposit) || 0)).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreditModal(false)}
+                  className="flex-1 bg-slate-900 hover:bg-slate-850 text-gray-300 py-2 rounded-lg font-bold min-h-[48px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creditLoading}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-505 disabled:opacity-50 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 min-h-[48px]"
+                >
+                  {creditLoading ? (
+                    <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      Save to Ledger <CheckCircle2 className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
