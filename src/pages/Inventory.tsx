@@ -219,6 +219,9 @@ export default function Inventory() {
       BarcodeFormat.UPC_A,
       BarcodeFormat.UPC_E
     ])
+    // Enable TRY_HARDER to perform deep image scans to detect smaller barcodes
+    hints.set(DecodeHintType.TRY_HARDER, true)
+
     const codeReader = new BrowserMultiFormatReader(hints)
     let active = true
 
@@ -240,11 +243,17 @@ export default function Inventory() {
 
     let controlsPromise: Promise<any> | null = null
 
-    if (scanDeviceId) {
-      controlsPromise = codeReader.decodeFromVideoDevice(scanDeviceId, videoElement, decodeCallback)
-    } else {
-      controlsPromise = codeReader.decodeFromVideoDevice(undefined, videoElement, decodeCallback)
+    // Configure Full HD 1080p camera parameters to sharpen resolution for small targets
+    const constraints: MediaStreamConstraints = {
+      video: {
+        deviceId: scanDeviceId ? { exact: scanDeviceId } : undefined,
+        facingMode: 'environment',
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
+      }
     }
+
+    controlsPromise = codeReader.decodeFromConstraints(constraints, videoElement, decodeCallback)
 
     return () => {
       active = false
