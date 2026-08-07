@@ -327,11 +327,11 @@ export default function Onboarding() {
                   onChange={(e) => setStoreType(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-850 rounded-lg py-2.5 px-3 text-white focus:outline-none"
                 >
-                  <option value="retail">Supermarket & Retail Grocery</option>
-                  <option value="clothing">Boutique & Clothing Store</option>
-                  <option value="electronics">Electronics & Tech Shop</option>
-                  <option value="pharmacy">Pharmacy & Cosmetics</option>
-                  <option value="other">Other Operations</option>
+                  <option value="retail">{t('onboarding.cat_retail')}</option>
+                  <option value="clothing">{t('onboarding.cat_clothing')}</option>
+                  <option value="electronics">{t('onboarding.cat_electronics')}</option>
+                  <option value="pharmacy">{t('onboarding.cat_pharmacy')}</option>
+                  <option value="other">{t('onboarding.cat_other')}</option>
                 </select>
               </div>
             </div>
@@ -351,14 +351,14 @@ export default function Onboarding() {
           <div className="space-y-4 animate-in fade-in duration-200">
             <div>
               <h3 className="text-lg font-bold text-white">{t('onboarding.theme_label')}</h3>
-              <p className="text-[11px] text-gray-400 mt-1">Configure layout appearance preferences.</p>
+              <p className="text-[11px] text-gray-400 mt-1">{t('onboarding.pref_desc')}</p>
             </div>
 
             <div className="grid grid-cols-3 gap-3 text-xs">
               {[
                 { name: 'dark', label: t('onboarding.theme_dark'), icon: Moon },
                 { name: 'light', label: t('onboarding.theme_light'), icon: Sun },
-                { name: 'system', label: 'System Mode', icon: Laptop }
+                { name: 'system', label: t('onboarding.theme_system'), icon: Laptop }
               ].map(t => (
                 <button
                   key={t.name}
@@ -399,14 +399,14 @@ export default function Onboarding() {
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Package className="w-5 h-5 text-indigo-400" /> {t('onboarding.sample_products')}
               </h3>
-              <p className="text-[11px] text-gray-400 mt-1">Preload or add inventory catalog products.</p>
+              <p className="text-[11px] text-gray-400 mt-1">{t('onboarding.prod_helper')}</p>
             </div>
 
             {/* Product form */}
             <div className="bg-slate-950/60 border border-slate-850 p-4 rounded-xl space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-gray-400 font-medium">Name</label>
+                  <label className="text-gray-400 font-medium">{t('onboarding.name')}</label>
                   <input
                     type="text"
                     value={prodName}
@@ -416,7 +416,7 @@ export default function Onboarding() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-gray-400 font-medium">Initial Cost</label>
+                  <label className="text-gray-400 font-medium">{t('onboarding.initial_cost')}</label>
                   <input
                     type="number"
                     value={prodCost}
@@ -429,7 +429,7 @@ export default function Onboarding() {
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <label className="text-gray-400 font-medium">Sell Price</label>
+                  <label className="text-gray-400 font-medium">{t('inventory.selling_price')}</label>
                   <input
                     type="number"
                     value={prodSell}
@@ -439,7 +439,7 @@ export default function Onboarding() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-gray-400 font-medium">Stock</label>
+                  <label className="text-gray-400 font-medium">{t('inventory.stock')}</label>
                   <input
                     type="number"
                     value={prodStock}
@@ -449,7 +449,7 @@ export default function Onboarding() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-gray-400 font-medium">Reorder Alert</label>
+                  <label className="text-gray-400 font-medium">{t('inventory.min_stock')}</label>
                   <input
                     type="number"
                     value={prodMinStock}
@@ -464,7 +464,7 @@ export default function Onboarding() {
                 onClick={handleAddProduct}
                 className="w-full bg-slate-900 border border-slate-800 text-white font-bold py-1.5 rounded transition-all flex items-center justify-center gap-1"
               >
-                <Plus className="w-4 h-4" /> Add Product Item
+                <Plus className="w-4 h-4" /> {t('onboarding.btn_add_prod')}
               </button>
             </div>
 
@@ -509,14 +509,14 @@ export default function Onboarding() {
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Landmark className="w-5 h-5 text-indigo-400" /> {t('onboarding.sample_expenses')}
               </h3>
-              <p className="text-[11px] text-gray-400 mt-1">Preload overhead expenses.</p>
+              <p className="text-[11px] text-gray-400 mt-1">{t('onboarding.exp_helper')}</p>
             </div>
 
             {/* Expense form */}
             <div className="bg-slate-950/60 border border-slate-850 p-4 rounded-xl space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-gray-400 font-medium">Category</label>
+                  <label className="text-gray-400 font-medium">{t('expenses.category_label')}</label>
                   <select
                     value={expCategory}
                     onChange={(e) => setExpCategory(e.target.value)}
@@ -533,7 +533,7 @@ export default function Onboarding() {
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-gray-400 font-medium">Amount</label>
+                  <label className="text-gray-400 font-medium">{t('expenses.amount')}</label>
                   <input
                     type="number"
                     value={expAmount}
@@ -548,7 +548,7 @@ export default function Onboarding() {
                 onClick={handleAddExpense}
                 className="w-full bg-slate-900 border border-slate-800 text-white font-bold py-1.5 rounded transition-all flex items-center justify-center gap-1"
               >
-                <Plus className="w-4 h-4" /> Add Expense Invoice
+                <Plus className="w-4 h-4" /> {t('onboarding.exp_add_btn')}
               </button>
             </div>
 
@@ -602,22 +602,22 @@ export default function Onboarding() {
             <div className="bg-slate-950/60 border border-slate-850 rounded-xl p-4 space-y-3.5 text-xs">
               <div className="grid grid-cols-2 gap-2 text-[10px] uppercase font-semibold text-gray-500">
                 <div>
-                  <span className="block text-gray-600">Location</span>
+                  <span className="block text-gray-600">{t('onboarding.city')}</span>
                   <span className="text-white text-xs">{city}</span>
                 </div>
                 <div>
-                  <span className="block text-gray-600">Currency</span>
+                  <span className="block text-gray-600">{t('onboarding.currency')}</span>
                   <span className="text-white text-xs">{currency}</span>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2 text-[10px] uppercase font-semibold text-gray-500 border-t border-slate-900 pt-3">
                 <div>
-                  <span className="block text-gray-600">Preloaded Products</span>
-                  <span className="text-indigo-400 text-xs font-bold">{productsList.length} items</span>
+                  <span className="block text-gray-600">{t('onboarding.sample_products')}</span>
+                  <span className="text-indigo-400 text-xs font-bold">{productsList.length}</span>
                 </div>
                 <div>
-                  <span className="block text-gray-600">Preloaded Bills</span>
-                  <span className="text-indigo-400 text-xs font-bold">{expensesList.length} items</span>
+                  <span className="block text-gray-600">{t('onboarding.sample_expenses')}</span>
+                  <span className="text-indigo-400 text-xs font-bold">{expensesList.length}</span>
                 </div>
               </div>
             </div>
@@ -638,7 +638,7 @@ export default function Onboarding() {
                 {loading ? (
                   <>
                     <span className="h-4.5 w-4.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Processing...</span>
+                    <span>{t('onboarding.processing')}</span>
                   </>
                 ) : (
                   <>

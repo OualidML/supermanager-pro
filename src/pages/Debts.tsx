@@ -110,7 +110,7 @@ export default function Debts() {
     try {
       const parsedAmount = parseFloat(settleAmount)
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        throw new Error('Please enter a valid numeric payment amount.')
+        throw new Error(t('debts.err_valid_amount'))
       }
 
       const newAmountPaid = targetDebt.amount_paid + parsedAmount
@@ -133,13 +133,13 @@ export default function Debts() {
 
       if (error) throw error
 
-      setSuccessMsg(`Successfully logged payment of ${currency}${parsedAmount.toFixed(2)} from ${targetDebt.customer_name}!`)
+      setSuccessMsg(`${t('debts.success_settled')} (${currency}${parsedAmount.toFixed(2)} - ${targetDebt.customer_name})`)
       setTargetDebt(null)
       setSettleAmount('')
 
       // Dispatch Success Toast
       window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: 'Debt payment registered successfully!', type: 'success' }
+        detail: { message: t('debts.success_settled'), type: 'success' }
       }))
 
       fetchDebts()
@@ -187,9 +187,9 @@ export default function Debts() {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-indigo-400" /> Credit Ledger (Tabs)
+            <BookOpen className="w-5 h-5 text-indigo-400" /> {t('debts.title')}
           </h2>
-          <p className="text-xs text-gray-400 font-medium">Record customer credits, verify outstanding debts, and settle payments.</p>
+          <p className="text-xs text-gray-400 font-medium">{t('debts.subtitle')}</p>
         </div>
       </div>
 
@@ -213,7 +213,7 @@ export default function Debts() {
           <div className="absolute right-4 top-4 text-rose-500/25">
             <Clock className="w-8 h-8" />
           </div>
-          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Outstanding Debt</span>
+          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{t('debts.outstanding')}</span>
           <h3 className="text-2xl font-extrabold text-rose-500 font-mono">
             {currency}{totalOutstanding.toFixed(2)}
           </h3>
@@ -224,7 +224,7 @@ export default function Debts() {
           <div className="absolute right-4 top-4 text-emerald-500/25">
             <CheckCircle2 className="w-8 h-8" />
           </div>
-          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Received</span>
+          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{t('debts.total_settled')}</span>
           <h3 className="text-2xl font-extrabold text-emerald-500 font-mono">
             {currency}{totalSettled.toFixed(2)}
           </h3>
@@ -235,7 +235,7 @@ export default function Debts() {
           <div className="absolute right-4 top-4 text-indigo-500/25">
             <User className="w-8 h-8" />
           </div>
-          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Active Debtors</span>
+          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{t('debts.active_debtors')}</span>
           <h3 className="text-2xl font-extrabold text-indigo-400 font-mono">
             {activeDebtorsCount}
           </h3>
@@ -251,7 +251,7 @@ export default function Debts() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by customer name or phone..."
+            placeholder={t('debts.search_placeholder')}
             className={`w-full bg-slate-950 border border-slate-850 rounded-lg py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/40 text-xs ${
               isRTL ? 'pl-3 pr-9 text-right' : 'pl-9 pr-3 text-left'
             }`}
@@ -265,7 +265,7 @@ export default function Debts() {
               statusFilter === 'unpaid' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-white'
             }`}
           >
-            Unpaid
+            {t('debts.unpaid')}
           </button>
           <button
             onClick={() => setStatusFilter('paid')}
@@ -273,7 +273,7 @@ export default function Debts() {
               statusFilter === 'paid' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-white'
             }`}
           >
-            Settled (Paid)
+            {t('debts.paid')}
           </button>
           <button
             onClick={() => setStatusFilter('all')}
@@ -281,7 +281,7 @@ export default function Debts() {
               statusFilter === 'all' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-white'
             }`}
           >
-            All
+            {t('debts.all')}
           </button>
         </div>
       </div>
@@ -295,7 +295,7 @@ export default function Debts() {
         </div>
       ) : filteredDebts.length === 0 ? (
         <div className="text-center py-20 border border-dashed border-slate-850 rounded-2xl text-gray-500 text-xs">
-          No credit transactions logged matching your search filters.
+          {t('debts.empty')}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
@@ -330,26 +330,26 @@ export default function Debts() {
                   </div>
 
                   <div className="text-[11px] text-gray-400 leading-normal max-w-lg">
-                    <span className="font-semibold block text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Items</span>
+                    <span className="font-semibold block text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">{t('debts.items')}</span>
                     {debt.items_summary}
                   </div>
                 </div>
 
                 <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between border-t sm:border-t-0 border-slate-850 pt-3 sm:pt-0 gap-4">
                   <div className="text-left sm:text-right space-y-1">
-                    <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider block">Balance Details</span>
+                    <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider block">Details</span>
                     <div className="flex gap-2.5 items-baseline text-xs">
                       <span className="text-gray-400">Total:</span>
                       <span className="font-mono text-white">{currency}{debt.total_amount.toFixed(2)}</span>
                     </div>
                     {debt.status !== 'paid' ? (
                       <div className="flex gap-2.5 items-baseline text-xs">
-                        <span className="text-gray-400">Paid:</span>
+                        <span className="text-gray-400">{t('debts.amount_paid')}:</span>
                         <span className="font-mono text-emerald-400">{currency}{debt.amount_paid.toFixed(2)}</span>
                       </div>
                     ) : null}
                     <div className="flex gap-2.5 items-baseline text-xs font-bold mt-0.5">
-                      <span className="text-gray-400">{debt.status === 'paid' ? 'Paid Off:' : 'Due:'}</span>
+                      <span className="text-gray-400">{debt.status === 'paid' ? `${t('debts.paid')}:` : `${t('debts.remaining')}:`}</span>
                       <span className={`font-mono ${debt.status === 'paid' ? 'text-emerald-400' : 'text-rose-400'}`}>
                         {currency}{debt.status === 'paid' ? debt.total_amount.toFixed(2) : outstanding.toFixed(2)}
                       </span>
@@ -361,11 +361,11 @@ export default function Debts() {
                       onClick={() => setTargetDebt(debt)}
                       className="bg-indigo-600 hover:bg-indigo-505 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/10 min-h-[48px]"
                     >
-                      <Check className="w-4 h-4" /> Record Payment
+                      <Check className="w-4 h-4" /> {t('debts.btn_settle')}
                     </button>
                   ) : (
                     <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1 flex items-center gap-1 mt-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Fully Settled
+                      <CheckCircle2 className="w-3.5 h-3.5" /> {t('debts.paid')}
                     </span>
                   )}
                 </div>
@@ -387,13 +387,13 @@ export default function Debts() {
             </button>
 
             <h3 className="font-bold text-white text-sm flex items-center gap-2 border-b border-slate-850 pb-2.5">
-              <Check className="w-4.5 h-4.5 text-emerald-400" /> Settle Credit Tab
+              <Check className="w-4.5 h-4.5 text-emerald-400" /> {t('debts.settle_title')}
             </h3>
 
             <div className="text-xs text-gray-400 space-y-2">
               <p>Record a cash payment from <strong>{targetDebt.customer_name}</strong> to reduce or settle their credit debt.</p>
               <div className="bg-slate-950/40 p-2.5 rounded border border-slate-850 flex justify-between font-mono">
-                <span>Remaining Debt:</span>
+                <span>{t('debts.remaining')}:</span>
                 <span className="text-rose-400 font-bold">
                   {currency}{(targetDebt.total_amount - targetDebt.amount_paid).toFixed(2)}
                 </span>
@@ -402,7 +402,7 @@ export default function Debts() {
 
             <form onSubmit={handleSettleDebt} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="text-gray-400 font-semibold">Payment Amount</label>
+                <label className="text-gray-400 font-semibold">{t('debts.amount_paid')}</label>
                 <input
                   type="number"
                   step="0.01"
@@ -420,7 +420,7 @@ export default function Debts() {
                   onClick={() => setTargetDebt(null)}
                   className="flex-1 bg-slate-900 hover:bg-slate-850 text-gray-300 py-2 rounded-lg font-bold min-h-[48px]"
                 >
-                  Cancel
+                  {t('inventory.btn_cancel')}
                 </button>
                 <button
                   type="submit"
@@ -431,7 +431,7 @@ export default function Debts() {
                     <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
-                      Confirm Payment
+                      {t('debts.btn_save_settle')}
                     </>
                   )}
                 </button>

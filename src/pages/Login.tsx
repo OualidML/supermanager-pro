@@ -357,7 +357,7 @@ export default function Login() {
             }}
             className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-bold py-2.5 rounded-lg transition-all transform active:scale-[0.98] shadow-lg shadow-amber-500/10 flex items-center justify-center gap-2 text-sm mt-2"
           >
-            <span>Employee Access</span>
+            <span>{t('login.btn_emp_access')}</span>
           </button>
         </form>
 
@@ -373,8 +373,8 @@ export default function Login() {
               <div className="mx-auto w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shadow-lg shadow-amber-500/10">
                 <Lock className="w-5.5 h-5.5" />
               </div>
-              <h2 className="text-lg font-bold text-white tracking-tight">Employee Access Mode</h2>
-              <p className="text-xs text-gray-400">Enter the 4-digit PIN to access register POS terminal.</p>
+              <h2 className="text-lg font-bold text-white tracking-tight">{t('login.emp_title')}</h2>
+              <p className="text-xs text-gray-400">{t('login.emp_desc')}</p>
             </div>
 
             {/* Error notifications */}
@@ -402,9 +402,9 @@ export default function Login() {
             {/* Lockout countdown UI */}
             {lockoutTime !== null ? (
               <div className="text-center space-y-3.5 max-w-xs animate-pulse">
-                <h3 className="text-sm font-bold text-rose-400">Too many failed attempts</h3>
+                <h3 className="text-sm font-bold text-rose-400">{t('login.lockout_title')}</h3>
                 <p className="text-[11px] text-gray-500 leading-normal">
-                  PIN access is disabled. Please wait for the lockout countdown to expire.
+                  {t('login.lockout_desc')}
                 </p>
                 <div className="text-3xl font-extrabold text-rose-500 font-mono tracking-wider">
                   {Math.floor(lockoutTime / 60)}:{(lockoutTime % 60).toString().padStart(2, '0')}
@@ -431,7 +431,7 @@ export default function Login() {
                   disabled={loading}
                   className="w-16 h-16 rounded-full text-xs font-semibold text-gray-500 hover:text-gray-300 transition-colors flex items-center justify-center min-h-[48px] min-w-[48px] disabled:opacity-50"
                 >
-                  Clear
+                  {t('login.clear')}
                 </button>
 
                 <button
@@ -449,7 +449,7 @@ export default function Login() {
                   disabled={loading}
                   className="w-16 h-16 rounded-full text-xs font-semibold text-gray-500 hover:text-gray-300 transition-colors flex items-center justify-center min-h-[48px] min-w-[48px] disabled:opacity-50"
                 >
-                  Delete
+                  {t('login.delete')}
                 </button>
               </div>
             )}
@@ -465,7 +465,7 @@ export default function Login() {
                 }}
                 className="text-xs text-gray-500 hover:text-gray-300 transition-colors font-medium border-t border-slate-900 w-full pt-4 text-center mt-2"
               >
-                Cancel & Return to Owner Login
+                {t('login.btn_return')}
               </button>
             )}
 

@@ -393,7 +393,7 @@ export default function Reports() {
           <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-indigo-400" /> {t('reports.title')}
           </h2>
-          <p className="text-xs text-gray-400 font-medium">Evaluate business P&L sheets, catalog velocity, and export CSV ledger summaries.</p>
+          <p className="text-xs text-gray-400 font-medium">{t('reports.subtitle')}</p>
         </div>
 
         {/* Filters */}
@@ -443,7 +443,7 @@ export default function Reports() {
               : 'text-gray-400 hover:text-gray-200'
           }`}
         >
-          Overview (P&L)
+          {t('reports.tab_overview')}
         </button>
         <button
           onClick={() => setActiveTab('employee')}
@@ -453,7 +453,7 @@ export default function Reports() {
               : 'text-gray-400 hover:text-gray-200'
           }`}
         >
-          Employee Sales
+          {t('reports.tab_employee')}
         </button>
       </div>
 
@@ -462,11 +462,11 @@ export default function Reports() {
           {/* P&L Summaries Row */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
-          { label: 'Gross Revenue', val: grossRevenue, color: 'text-white', desc: 'Total sales value', sign: '+' },
-          { label: 'COGS', val: cogs, color: 'text-rose-400', desc: 'Product purchase cost', sign: '-' },
-          { label: 'Gross Profit', val: grossProfit, color: 'text-emerald-400', desc: 'Revenue - COGS', sign: '+' },
-          { label: 'Expenses', val: expensesTotal, color: 'text-rose-400', desc: 'Operations overhead', sign: '-' },
-          { label: 'Net Profit', val: netProfit, color: netProfit >= 0 ? 'text-indigo-400' : 'text-rose-500', desc: 'Operating margins', sign: netProfit >= 0 ? '+' : '-' }
+          { label: t('reports.gross_revenue'), val: grossRevenue, color: 'text-white', desc: t('reports.desc_revenue'), sign: '+' },
+          { label: t('reports.cogs'), val: cogs, color: 'text-rose-400', desc: t('reports.desc_cogs'), sign: '-' },
+          { label: t('reports.gross_profit'), val: grossProfit, color: 'text-emerald-400', desc: t('reports.desc_gprofit'), sign: '+' },
+          { label: t('expenses.title'), val: expensesTotal, color: 'text-rose-400', desc: t('reports.desc_expenses'), sign: '-' },
+          { label: t('reports.net_profit'), val: netProfit, color: netProfit >= 0 ? 'text-indigo-400' : 'text-rose-500', desc: t('reports.desc_nprofit'), sign: netProfit >= 0 ? '+' : '-' }
         ].map((item, idx) => (
           <div key={idx} className="glass rounded-xl p-4 shadow-lg border border-slate-900/60 flex flex-col justify-between h-24">
             <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">{item.label}</span>
@@ -489,17 +489,17 @@ export default function Reports() {
         <div className="lg:col-span-2 glass rounded-xl p-5 shadow-xl space-y-4 border border-slate-900/60">
           <div>
             <h3 className="font-bold text-white text-sm">{t('reports.timeline_title')}</h3>
-            <p className="text-[10px] text-gray-400">Comparing daily sales revenue against operational overheads</p>
+            <p className="text-[10px] text-gray-400">{t('reports.rev_vs_exp')}</p>
           </div>
 
           <div className="h-64 pt-2">
             {loading ? (
               <div className="h-full w-full bg-slate-950/20 animate-pulse rounded-lg flex items-center justify-center text-xs text-gray-500">
-                Compiling flow charts...
+                Loading...
               </div>
             ) : flowChartData.length === 0 ? (
               <div className="h-full w-full border border-dashed border-slate-850 rounded-lg flex items-center justify-center text-xs text-gray-500">
-                No revenue or expenses logged inside this range.
+                {t('expenses.empty')}
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -508,8 +508,8 @@ export default function Reports() {
                   <YAxis stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
                   <Tooltip contentStyle={{ backgroundColor: '#09090b', borderColor: '#1e293b', borderRadius: '8px', color: '#f8fafc', fontSize: '9.5px' }} />
                   <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px' }} />
-                  <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} name="Gross Revenue" />
-                  <Bar dataKey="expenses" fill="#f43f5e" radius={[4, 4, 0, 0]} name="Expenses" />
+                  <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} name={t('reports.gross_revenue')} />
+                  <Bar dataKey="expenses" fill="#f43f5e" radius={[4, 4, 0, 0]} name={t('expenses.title')} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -522,17 +522,17 @@ export default function Reports() {
             <h3 className="font-bold text-white text-sm flex items-center gap-1">
               <PieIcon className="w-4.5 h-4.5 text-indigo-400" /> {t('reports.donut_title')}
             </h3>
-            <p className="text-[10px] text-gray-400">Proportional category performance</p>
+            <p className="text-[10px] text-gray-400">{t('reports.sales_by_cat')}</p>
           </div>
 
           <div className="h-48 pt-1 flex items-center justify-center">
             {loading ? (
               <div className="h-full w-full bg-slate-950/20 animate-pulse rounded-lg flex items-center justify-center text-xs text-gray-500">
-                Building shares...
+                Loading...
               </div>
             ) : pieChartData.length === 0 ? (
               <div className="h-full w-full border border-dashed border-slate-850 rounded-lg flex items-center justify-center text-xs text-gray-500">
-                No items sold in range.
+                {t('sales.cart_empty')}
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -573,10 +573,10 @@ export default function Reports() {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-950/60 border-b border-slate-850 text-gray-500 font-semibold text-[10px] uppercase">
-                  <th className="p-3">Product Name</th>
-                  <th className="p-3">Category</th>
-                  <th className="p-3 text-center">Units Sold</th>
-                  <th className="p-3 text-right">Revenue</th>
+                  <th className="p-3">{t('reports.item_name')}</th>
+                  <th className="p-3">{t('inventory.category')}</th>
+                  <th className="p-3 text-center">{t('reports.qty_sold')}</th>
+                  <th className="p-3 text-right">{t('reports.line_total')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-850/60 text-gray-300">
@@ -588,7 +588,7 @@ export default function Reports() {
                   ))
                 ) : bestSellers.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center py-8 text-gray-500">No records found.</td>
+                    <td colSpan={4} className="text-center py-8 text-gray-500">{t('inventory.empty')}</td>
                   </tr>
                 ) : (
                   bestSellers.map(item => (
@@ -615,10 +615,10 @@ export default function Reports() {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-950/60 border-b border-slate-850 text-gray-500 font-semibold text-[10px] uppercase">
-                  <th className="p-3">Product Name</th>
-                  <th className="p-3">Category</th>
-                  <th className="p-3 text-center">Units Sold</th>
-                  <th className="p-3 text-right">Stock Level</th>
+                  <th className="p-3">{t('reports.item_name')}</th>
+                  <th className="p-3">{t('inventory.category')}</th>
+                  <th className="p-3 text-center">{t('reports.qty_sold')}</th>
+                  <th className="p-3 text-right">{t('inventory.stock')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-850/60 text-gray-300">
@@ -630,7 +630,7 @@ export default function Reports() {
                   ))
                 ) : slowestMovers.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center py-8 text-gray-500">No records found.</td>
+                    <td colSpan={4} className="text-center py-8 text-gray-500">{t('inventory.empty')}</td>
                   </tr>
                 ) : (
                   slowestMovers.map(item => {
@@ -641,7 +641,7 @@ export default function Reports() {
                         <td className="p-3 text-gray-400">{item.category}</td>
                         <td className="p-3 text-center font-bold text-amber-400">{item.qtySold}</td>
                         <td className="p-3 text-right font-mono text-gray-400">
-                          {productsListLookup(item.id, allProducts) || '0'} left
+                          {productsListLookup(item.id, allProducts) || '0'}
                         </td>
                       </tr>
                     )
@@ -660,35 +660,35 @@ export default function Reports() {
           {/* KPI summaries with amber theme */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="glass rounded-xl p-5 shadow-lg border border-slate-900 flex flex-col space-y-2">
-              <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Employee Sales Revenue</span>
+              <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">{t('reports.emp_rev')}</span>
               <div className="text-3xl font-extrabold text-[#f59e0b] font-mono">
                 <CountUp value={employeeSalesRevenue} prefix={currency} />
               </div>
-              <span className="text-[9px] text-gray-400">Total gross value generated by paint store employees.</span>
+              <span className="text-[9px] text-gray-400">{t('reports.emp_rev_desc')}</span>
             </div>
 
             <div className="glass rounded-xl p-5 shadow-lg border border-slate-900 flex flex-col space-y-2">
-              <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Total Sales Count</span>
+              <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">{t('reports.emp_count')}</span>
               <div className="text-3xl font-extrabold text-white font-mono">
                 <CountUp value={employeeSalesList.length} decimals={0} />
               </div>
-              <span className="text-[9px] text-gray-400">Number of transactions processed in POS cashier mode.</span>
+              <span className="text-[9px] text-gray-400">{t('reports.emp_count_desc')}</span>
             </div>
           </div>
 
           {/* Detailed table of employee sales */}
           <div className="glass rounded-xl p-5 shadow-xl border border-slate-900/60 space-y-4">
-            <h3 className="font-bold text-white text-sm">Employee POS Sales Ledger</h3>
+            <h3 className="font-bold text-white text-sm">{t('reports.emp_ledger')}</h3>
             
             <div className="border border-slate-850 rounded-xl overflow-hidden">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-slate-950/60 border-b border-slate-850 text-gray-500 font-semibold text-[10px] uppercase">
-                    <th className="p-3">Product Name</th>
-                    <th className="p-3">SKU</th>
-                    <th className="p-3 text-center">Qty Sold</th>
-                    <th className="p-3 text-right">Line Total</th>
-                    <th className="p-3 text-right">Date & Time</th>
+                    <th className="p-3">{t('reports.item_name')}</th>
+                    <th className="p-3">{t('reports.sku')}</th>
+                    <th className="p-3 text-center">{t('reports.qty_sold')}</th>
+                    <th className="p-3 text-right">{t('reports.line_total')}</th>
+                    <th className="p-3 text-right">{t('reports.date_time')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-850/60 text-gray-300">
@@ -700,7 +700,7 @@ export default function Reports() {
                     ))
                   ) : employeeSalesList.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="text-center py-10 text-gray-500 font-medium">No sales recorded by employees in this period.</td>
+                      <td colSpan={5} className="text-center py-10 text-gray-500 font-medium">{t('reports.emp_empty')}</td>
                     </tr>
                   ) : (
                     employeeSalesList.map(sale => (
