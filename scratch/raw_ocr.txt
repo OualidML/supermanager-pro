@@ -1,0 +1,63 @@
+<USER_REQUEST>
+I want to add several many items to the resulted parfums in the app following this prompt : # TASK: Fragrance Catalog Compilation & Note Enrichment for Parfumworld App
+
+## OBJECTIVE
+You are tasked with processing, deduplicating, and compiling a master JSON/SQL dataset of fragrance profiles from two raw catalog files (`AF Liste Inspiration Parfums.pdf` and `Listing Parfums AF 26-11-2025.pdf`). You must enrich each unique entry with its complete olfactory pyramid (Top, Middle, Base notes) and fragrance family extracted from Fragrantica.com.
+
+---
+
+## STEP 1: DATA INGESTION & DEDUPLICATION RULES
+1. Parse all items from both PDF listings.
+2. Group entries by their **Base Fragrance Entity** (ignore quality suffixes `A`, `B`, `C`, `N`, `T`, `TOP` for note matching, but preserve them as product SKUs/variants).
+3. Map gender codes correctly:
+   - `H` -> Men
+   - `F` -> Women
+   - `U` -> Unisex
+
+---
+
+## STEP 2: FRAGRANTICA NOTE EXTRACTION & ENRICHMENT
+For every unique perfume entity identified in the catalog:
+1. Search and match the exact original fragrance on Fragrantica.com (e.g., "1 Million Royal Paco Rabanne", "Baccarat Rouge 540 Francis Kurkdjian", "Hacivat Nishane").
+2. Extract the complete note structure:
+   - **Top Notes** (e.g., Cardamom, Tangerine, Bergamot)
+   - **Heart / Middle Notes** (e.g., Lavender, Violet Leaf, Sage)
+   - **Base Notes** (e.g., Benzoin, Cedarwood, Patchouli)
+   - **Fragrance Family / Main Accords** (e.g., Amber Woody, Citrus, Oriental, Aromatic Fougere)
+3. For traditional Oriental Oils/Attars without a direct Fragrantica entry (e.g., "Musk Tahara", "Mukhallat Alf Leila wa Leila"):
+   - Assign their standard olfactory profile (e.g., White Musk, Oud, Rose, Amber, Floral).
+
+---
+
+## STEP 3: OUTPUT SCHEMA (JSON FORMAT)
+Generate the consolidated database using the following structured schema:
+
+{
+  "fragrance_id": "P-0320",
+  "brand": "Paco Rabanne",
+  "original_name": "1 Million Royal",
+  "gender": "Men",
+  "category": "Designer", // Options: "Designer", "Niche", "Oriental/Attar"
+  "fragrance_family": "Amber Woody",
+  "notes": {
+    "top_notes": ["Cardamom", "Tangerine", "Bergamot"],
+    "middle_notes": ["Lavender", "Violet Leaf", "Clary Sage"],
+    "base_notes": ["Benzoin", "Cedarwood", "Patchouli"]
+  },
+  "accords": ["Warm Spicy", "Aromatic", "Woody", "Amber"],
+  "variants_in_stock": [
+    {"code": "320", "grade": "Standard", "price_per_100g": 1500},
+    {"code": "0320A", "grade": "Top Quality", "price_per_100g": 1800}
+  ]
+}
+
+---
+
+## STEP 4: INTEGRATION EXECUTION
+- Compile all 485 unique fragrance models into this schema.
+- Ensure 100% note coverage so that the Parfumworld app note-filtering algorithm can accurately match every user preference.
+- Output the final result as a valid, production-ready JSON array for database seeding.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-08-04T15:25:21-07:00.
+</ADDITIONAL_METADATA>
