@@ -10,6 +10,7 @@ import Reports from './pages/Reports'
 import Forecast from './pages/Forecast'
 import Settings from './pages/Settings'
 import Debts from './pages/Debts'
+import Pos from './pages/Pos'
 import { AccessModeProvider } from './contexts/AccessModeContext'
 
 export default function App() {
@@ -33,7 +34,7 @@ export default function App() {
             <Route path="/forecast" element={<Forecast />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/debts" element={<Debts />} />
-            <Route path="/pos" element={<Sales />} />
+            <Route path="/pos" element={<Pos />} />
           </Route>
 
           {/* Default Catch-all Routing */}

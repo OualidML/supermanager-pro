@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings as SettingsIcon, Store, ShieldCheck, Database, Save, RotateCcw, Download, Upload, AlertTriangle } from 'lucide-react'
+import { Settings as SettingsIcon, Store, ShieldCheck, Database, Save, RotateCcw, Download, Upload, AlertTriangle, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useTranslation } from 'react-i18next'
 
@@ -11,12 +11,47 @@ export default function Settings() {
   const [saveSuccess, setSaveSuccess] = useState(false)
   const navigate = useNavigate()
 
+  const [profileId, setProfileId] = useState<string | null>(null)
+  const [employeeModeEnabled, setEmployeeModeEnabled] = useState(false)
+  const [lastEmployeeAccess, setLastEmployeeAccess] = useState<string | null>(null)
+  const [employeePin, setEmployeePin] = useState('')
+  
+  // PIN change states
+  const [showPinModal, setShowPinModal] = useState(false)
+  const [ownerPassword, setOwnerPassword] = useState('')
+  const [newPin, setNewPin] = useState('')
+  const [pinError, setPinError] = useState<string | null>(null)
+
   useEffect(() => {
     const savedName = localStorage.getItem('onboarded_store_name')
     const savedType = localStorage.getItem('onboarded_store_type')
     if (savedName) setStoreName(savedName)
     if (savedType) setStoreType(savedType)
+    
+    fetchProfile()
   }, [])
+
+  const fetchProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase
+          .from('store_profiles')
+          .select('*')
+          .eq('owner_id', user.id)
+          .single()
+
+        if (profile) {
+          setProfileId(profile.id)
+          setEmployeeModeEnabled(profile.employee_mode_enabled ?? false)
+          setLastEmployeeAccess(profile.last_employee_access || null)
+          setEmployeePin(profile.employee_pin || '')
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load profile settings:', e)
+    }
+  }
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault()
@@ -34,6 +69,71 @@ export default function Settings() {
       localStorage.removeItem('onboarded_store_name')
       localStorage.removeItem('onboarded_store_type')
       navigate('/onboarding')
+    }
+  }
+
+  const handleToggleEmployeeMode = async (enabled: boolean) => {
+    setEmployeeModeEnabled(enabled)
+    try {
+      if (profileId) {
+        const { error } = await supabase
+          .from('store_profiles')
+          .update({ employee_mode_enabled: enabled })
+          .eq('id', profileId)
+        if (error) throw error
+        
+        window.dispatchEvent(new CustomEvent('app-toast', {
+          detail: { message: `Employee Access ${enabled ? 'Enabled' : 'Disabled'}`, type: 'success' }
+        }))
+      }
+    } catch (e: any) {
+      console.error('Failed to toggle employee mode:', e)
+    }
+  }
+
+  const handleChangePin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPinError(null)
+
+    if (newPin.length !== 4 || !/^\d+$/.test(newPin)) {
+      setPinError('PIN must be exactly 4 digits.')
+      return
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user || !user.email) throw new Error('No authenticated user session.')
+
+      // Confirm owner password by re-authenticating
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: ownerPassword
+      })
+
+      if (signInErr) {
+        throw new Error('Incorrect owner password. Verification failed.')
+      }
+
+      // Update PIN inside store_profiles
+      if (profileId) {
+        const { error: updateErr } = await supabase
+          .from('store_profiles')
+          .update({ employee_pin: newPin })
+          .eq('id', profileId)
+
+        if (updateErr) throw updateErr
+
+        setEmployeePin(newPin)
+        setShowPinModal(false)
+        setOwnerPassword('')
+        setNewPin('')
+
+        window.dispatchEvent(new CustomEvent('app-toast', {
+          detail: { message: 'Employee access PIN changed successfully!', type: 'success' }
+        }))
+      }
+    } catch (err: any) {
+      setPinError(err.message || 'Verification or update failed.')
     }
   }
 
@@ -170,7 +270,8 @@ export default function Settings() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Store settings */}
-        <div className="md:col-span-2 glass rounded-xl p-5 shadow-xl space-y-4">
+        <div className="md:col-span-2 space-y-6">
+          <div className="glass rounded-xl p-5 shadow-xl space-y-4">
           <h3 className="font-bold text-white text-sm flex items-center gap-2">
             <Store className="w-4 h-4 text-indigo-400" /> Store Profile
           </h3>
@@ -218,6 +319,71 @@ export default function Settings() {
               <Save className="w-3.5 h-3.5" /> Save Profile Settings
             </button>
           </form>
+          </div>
+
+          {/* Employee Access Settings Card */}
+          <div className="glass rounded-xl p-5 shadow-xl space-y-4">
+            <h3 className="font-bold text-white text-sm flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-[#f59e0b]" /> Employee Access Settings
+            </h3>
+            
+            <div className="space-y-4 text-xs">
+              <div className="flex items-center justify-between border-b border-slate-850 pb-3">
+                <div>
+                  <span className="font-bold text-white block">Enable Employee POS Mode</span>
+                  <span className="text-[10px] text-gray-500 block">Allow cashiers to use the PIN numpad to enter register.</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={employeeModeEnabled}
+                    onChange={(e) => handleToggleEmployeeMode(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-300 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#f59e0b]"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between border-b border-slate-850 pb-3">
+                <div>
+                  <span className="font-bold text-white block">Cashier PIN Code</span>
+                  <span className="text-[10px] text-gray-500 block font-mono">Current PIN: {employeePin ? '••••' : 'Not Set'}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPinError(null)
+                    setShowPinModal(true)
+                  }}
+                  className="bg-slate-900 border border-slate-800 hover:bg-slate-850 hover:border-slate-700 text-gray-200 font-bold py-2 px-3 rounded-lg transition-all min-h-[38px] text-[11px]"
+                >
+                  Change 4-Digit PIN
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between border-b border-slate-850 pb-3">
+                <div>
+                  <span className="font-bold text-white block">Last Employee Session</span>
+                  <span className="text-[10px] text-gray-500 block font-mono">
+                    {lastEmployeeAccess
+                      ? new Date(lastEmployeeAccess).toLocaleString(i18n.language)
+                      : 'Never Accessed'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('/reports?tab=employee')}
+                  className="w-full bg-[#f59e0b]/10 border border-[#f59e0b]/20 hover:bg-[#f59e0b]/20 text-[#f59e0b] font-bold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                >
+                  View Employee Sales Report ➔
+                </button>
+              </div>
+
+            </div>
+          </div>
         </div>
 
         {/* System parameters */}
@@ -302,6 +468,84 @@ export default function Settings() {
         </div>
 
       </div>
+
+      {/* Change PIN Password Check Modal */}
+      {showPinModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-850 rounded-2xl p-5 shadow-2xl space-y-4 relative">
+            <button
+              onClick={() => {
+                setShowPinModal(false)
+                setOwnerPassword('')
+                setNewPin('')
+                setPinError(null)
+              }}
+              className="absolute top-4 right-4 text-gray-500 hover:text-white p-1 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="font-bold text-white text-sm flex items-center gap-2 border-b border-slate-850 pb-2.5">
+              <ShieldCheck className="w-4.5 h-4.5 text-amber-500" /> Set Cashier PIN Code
+            </h3>
+
+            {pinError && (
+              <div className="bg-rose-500/10 border border-rose-500/20 rounded p-2.5 text-rose-450 text-[10px] flex items-start gap-1">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                <span>{pinError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleChangePin} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="text-gray-400 font-semibold">New 4-Digit PIN</label>
+                <input
+                  type="text"
+                  maxLength={4}
+                  required
+                  value={newPin}
+                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="e.g. 1234"
+                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px] text-center tracking-widest font-bold text-lg"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 font-semibold">Owner Password Confirmation</label>
+                <input
+                  type="password"
+                  required
+                  value={ownerPassword}
+                  onChange={(e) => setOwnerPassword(e.target.value)}
+                  placeholder="Enter your manager password"
+                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPinModal(false)
+                    setOwnerPassword('')
+                    setNewPin('')
+                    setPinError(null)
+                  }}
+                  className="flex-1 bg-slate-900 hover:bg-slate-850 text-gray-300 py-2 rounded-lg font-bold min-h-[48px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 py-2 rounded-lg font-bold min-h-[48px]"
+                >
+                  Save PIN
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   )

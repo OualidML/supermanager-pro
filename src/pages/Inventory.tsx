@@ -16,7 +16,8 @@ import {
   Sparkles,
   ArrowUpRight,
   Volume2,
-  Upload
+  Upload,
+  Eye
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { BrowserMultiFormatReader } from '@zxing/browser'
@@ -33,6 +34,7 @@ interface ProductItem {
   category: string
   costPrice: number
   profitMargin: number
+  show_to_employee: boolean
 }
 
 export default function Inventory() {
@@ -143,7 +145,8 @@ export default function Inventory() {
           price: sellPrice,
           category: p.category || 'General',
           costPrice: cost,
-          profitMargin: parseFloat(profitMargin.toFixed(1))
+          profitMargin: parseFloat(profitMargin.toFixed(1)),
+          show_to_employee: p.show_to_employee ?? true
         }
       })
 
@@ -330,6 +333,30 @@ export default function Inventory() {
       setTimeout(() => setSuccessMsg(''), 2500)
     } catch (err: any) {
       setDbError(err.message || 'Failed to save product.')
+    }
+  }
+
+  const handleToggleEmployeeVisibility = async (productId: string, currentVal: boolean) => {
+    const newVal = !currentVal
+    
+    // Optimistic UI update
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, show_to_employee: newVal } : p))
+
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ show_to_employee: newVal })
+        .eq('id', productId)
+
+      if (error) throw error
+
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: `Product visibility updated!`, type: 'success' }
+      }))
+    } catch (e: any) {
+      // Revert UI on failure
+      setProducts(prev => prev.map(p => p.id === productId ? { ...p, show_to_employee: currentVal } : p))
+      console.error('Failed to update employee visibility:', e)
     }
   }
 
@@ -697,6 +724,22 @@ export default function Inventory() {
                   >
                     <RotateCcw className="w-3 h-3 text-indigo-400" /> Restock
                   </button>
+                </div>
+
+                {/* Employee POS visibility toggle */}
+                <div className="flex items-center justify-between border-t border-slate-900/60 pt-3 mt-3.5 text-[10px]">
+                  <span className="text-gray-400 font-semibold flex items-center gap-1">
+                    <Eye className="w-3.5 h-3.5 text-amber-500" /> Visible in Employee POS
+                  </span>
+                  <label className="relative inline-flex items-center cursor-pointer scale-75 origin-right">
+                    <input
+                      type="checkbox"
+                      checked={prod.show_to_employee}
+                      onChange={() => handleToggleEmployeeVisibility(prod.id, prod.show_to_employee)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-950 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-300 after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#f59e0b]"></div>
+                  </label>
                 </div>
 
               </div>
