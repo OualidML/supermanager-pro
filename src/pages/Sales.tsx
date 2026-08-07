@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   ShoppingCart,
   Plus,
@@ -13,12 +14,14 @@ import {
   X,
   Sparkles,
   ShoppingBag,
-  BookOpen
+  BookOpen,
+  LogOut
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { BrowserMultiFormatReader } from '@zxing/browser'
 import { BarcodeFormat, DecodeHintType } from '@zxing/library'
 import { useTranslation } from 'react-i18next'
+import { useAccessMode } from '../contexts/AccessModeContext'
 
 interface CartItem {
   id: string
@@ -31,6 +34,8 @@ interface CartItem {
 
 export default function Sales() {
   const { t, i18n } = useTranslation()
+  const navigate = useNavigate()
+  const { accessMode, setAccessMode } = useAccessMode()
   const [loading, setLoading] = useState(false)
   const [currency, setCurrency] = useState('$')
   
@@ -83,10 +88,16 @@ export default function Sales() {
       }
 
       // Load products cache for suggestions & search
-      const { data: products } = await supabase
+      let query = supabase
         .from('products')
         .select('*')
         .eq('owner_id', user.id)
+
+      if (accessMode === 'employee') {
+        query = query.eq('show_to_employee', true)
+      }
+
+      const { data: products } = await query
 
       setProductsCache(products || [])
     } catch (e) {
@@ -310,7 +321,8 @@ export default function Sales() {
         product_id: item.id,
         quantity: item.quantity,
         price_at_sale: item.price,
-        total_price: item.price * item.quantity
+        total_price: item.price * item.quantity,
+        recorded_by: accessMode === 'employee' ? 'employee' : 'owner'
       }))
 
       const { error: salesErr } = await supabase
@@ -430,12 +442,28 @@ export default function Sales() {
           <p className="text-xs text-gray-400 font-medium">Scan EAN-13 barcodes or use manual lookups to checkout items.</p>
         </div>
 
-        <button
-          onClick={() => setIsScanning(true)}
-          className="bg-indigo-600 hover:bg-indigo-505 text-white font-bold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-indigo-600/15 flex items-center justify-center gap-2 text-xs"
-        >
-          <Scan className="w-4 h-4" /> Scan & Sell (Camera)
-        </button>
+        <div className="flex items-center gap-2.5">
+          {accessMode === 'employee' && (
+            <button
+              type="button"
+              onClick={() => {
+                setAccessMode('owner')
+                navigate('/login?exit=true')
+              }}
+              className="bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-bold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-1.5 text-xs min-h-[40px]"
+            >
+              <LogOut className="w-4 h-4" /> EXIT Mode
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsScanning(true)}
+            className="bg-indigo-600 hover:bg-indigo-505 text-white font-bold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-indigo-600/15 flex items-center justify-center gap-2 text-xs"
+          >
+            <Scan className="w-4 h-4" /> Scan & Sell (Camera)
+          </button>
+        </div>
       </div>
 
       {cartError && (

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { KeyRound, Mail, Sparkles, Building2, Globe, AlertCircle, ShieldCheck } from 'lucide-react'
+import { KeyRound, Mail, Sparkles, Building2, Globe, AlertCircle, ShieldCheck, Lock } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useTranslation } from 'react-i18next'
+import { useAccessMode } from '../contexts/AccessModeContext'
 
 export default function Login() {
   const { t, i18n } = useTranslation()
@@ -15,6 +16,120 @@ export default function Login() {
   const [infoMessage, setInfoMessage] = useState<string | null>(null)
   
   const navigate = useNavigate()
+
+  // Access mode integration
+  const { setAccessMode } = useAccessMode()
+  const [showPinNumpad, setShowPinNumpad] = useState(false)
+  const [enteredPin, setEnteredPin] = useState<string[]>([])
+  const [wrongAttempts, setWrongAttempts] = useState(0)
+  const [lockoutTime, setLockoutTime] = useState<number | null>(null)
+
+  // Check lockout and exit states on mount
+  useEffect(() => {
+    const lockoutUntil = localStorage.getItem('employee_lockout_until')
+    if (lockoutUntil) {
+      const remainingTime = Math.ceil((parseInt(lockoutUntil) - Date.now()) / 1000)
+      if (remainingTime > 0) {
+        setLockoutTime(remainingTime)
+        setShowPinNumpad(true)
+      } else {
+        localStorage.removeItem('employee_lockout_until')
+      }
+    }
+
+    const query = new URLSearchParams(window.location.search)
+    if (query.get('exit') === 'true') {
+      setShowPinNumpad(true)
+    }
+  }, [])
+
+  // Lockout countdown timer
+  useEffect(() => {
+    if (lockoutTime === null) return
+    const timer = setInterval(() => {
+      setLockoutTime((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(timer)
+          localStorage.removeItem('employee_lockout_until')
+          setWrongAttempts(0)
+          return null
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [lockoutTime])
+
+  const handlePinDigitInput = async (digit: string) => {
+    if (lockoutTime !== null) return
+    if (enteredPin.length >= 4) return
+
+    const newPin = [...enteredPin, digit]
+    setEnteredPin(newPin)
+
+    if (newPin.length === 4) {
+      const pinStr = newPin.join('')
+      setLoading(true)
+      setError(null)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          throw new Error('No active store session found. The Store Owner must log in first.')
+        }
+
+        const { data: profile, error: profileErr } = await supabase
+          .from('store_profiles')
+          .select('id, employee_pin')
+          .eq('owner_id', user.id)
+          .single()
+
+        if (profileErr || !profile) {
+          throw new Error('Store profile data could not be retrieved.')
+        }
+
+        if (profile.employee_pin === pinStr) {
+          await supabase
+            .from('store_profiles')
+            .update({ last_employee_access: new Date().toISOString() })
+            .eq('id', profile.id)
+
+          setAccessMode('employee')
+          setShowPinNumpad(false)
+          setEnteredPin([])
+          setWrongAttempts(0)
+          navigate('/pos')
+        } else {
+          const nextAttempts = wrongAttempts + 1
+          setWrongAttempts(nextAttempts)
+          setEnteredPin([])
+
+          if (nextAttempts >= 3) {
+            const unlockTimestamp = Date.now() + 5 * 60 * 1000
+            localStorage.setItem('employee_lockout_until', String(unlockTimestamp))
+            setLockoutTime(300)
+            setError('Too many incorrect attempts. Locked out for 5 minutes.')
+          } else {
+            setError(`Incorrect PIN. ${3 - nextAttempts} attempts remaining.`)
+          }
+        }
+      } catch (err: any) {
+        setError(err.message || 'An error occurred during verification.')
+        setEnteredPin([])
+      } finally {
+        setLoading(false)
+      }
+    }
+  }
+
+  const handlePinDelete = () => {
+    if (enteredPin.length > 0) {
+      setEnteredPin(enteredPin.slice(0, -1))
+    }
+  }
+
+  const handlePinClear = () => {
+    setEnteredPin([])
+  }
 
   useEffect(() => {
     const rememberedEmail = localStorage.getItem('remembered_email')
@@ -219,7 +334,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 hover:bg-indigo-505 text-white font-medium py-2.5 rounded-lg transition-all transform active:scale-[0.98] shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+            className="w-full bg-indigo-600 hover:bg-indigo-555 text-white font-medium py-2.5 rounded-lg transition-all transform active:scale-[0.98] shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 text-sm disabled:opacity-50"
           >
             {loading ? (
               <>
@@ -233,9 +348,131 @@ export default function Login() {
               </>
             )}
           </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setError(null)
+              setShowPinNumpad(true)
+            }}
+            className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-bold py-2.5 rounded-lg transition-all transform active:scale-[0.98] shadow-lg shadow-amber-500/10 flex items-center justify-center gap-2 text-sm mt-2"
+          >
+            <span>Employee Access</span>
+          </button>
         </form>
 
       </div>
+
+      {/* Full-screen PIN entry numpad */}
+      {showPinNumpad && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-6 text-white select-none">
+          <div className="w-full max-w-sm flex flex-col items-center space-y-8">
+            
+            {/* Header / Lock Status */}
+            <div className="text-center space-y-2">
+              <div className="mx-auto w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shadow-lg shadow-amber-500/10">
+                <Lock className="w-5.5 h-5.5" />
+              </div>
+              <h2 className="text-lg font-bold text-white tracking-tight">Employee Access Mode</h2>
+              <p className="text-xs text-gray-400">Enter the 4-digit PIN to access register POS terminal.</p>
+            </div>
+
+            {/* Error notifications */}
+            {error && (
+              <div className="w-full bg-rose-500/10 border border-rose-500/20 rounded-lg p-2.5 text-center text-rose-400 text-xs flex items-center justify-center gap-1.5 animate-pulse">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Digit Slots visual feedback */}
+            <div className="flex gap-4 justify-center py-2">
+              {[0, 1, 2, 3].map((idx) => (
+                <div
+                  key={idx}
+                  className={`w-4 h-4 rounded-full border-2 transition-all duration-150 ${
+                    enteredPin.length > idx
+                      ? 'bg-[#f59e0b] border-[#f59e0b] scale-110 shadow-md shadow-amber-500/40'
+                      : 'border-slate-800 bg-transparent'
+                  }`}
+                />
+              ))}
+            </div>
+
+            {/* Lockout countdown UI */}
+            {lockoutTime !== null ? (
+              <div className="text-center space-y-3.5 max-w-xs animate-pulse">
+                <h3 className="text-sm font-bold text-rose-400">Too many failed attempts</h3>
+                <p className="text-[11px] text-gray-500 leading-normal">
+                  PIN access is disabled. Please wait for the lockout countdown to expire.
+                </p>
+                <div className="text-3xl font-extrabold text-rose-500 font-mono tracking-wider">
+                  {Math.floor(lockoutTime / 60)}:{(lockoutTime % 60).toString().padStart(2, '0')}
+                </div>
+              </div>
+            ) : (
+              /* Numpad Keys Grid */
+              <div className="grid grid-cols-3 gap-4 w-64 max-w-xs justify-items-center">
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => handlePinDigitInput(num)}
+                    disabled={loading}
+                    className="w-16 h-16 rounded-full bg-slate-900 border border-slate-800 hover:bg-slate-800 hover:border-slate-750 active:scale-95 transition-all text-xl font-bold flex items-center justify-center min-h-[48px] min-w-[48px] disabled:opacity-50"
+                  >
+                    {num}
+                  </button>
+                ))}
+                
+                <button
+                  type="button"
+                  onClick={handlePinClear}
+                  disabled={loading}
+                  className="w-16 h-16 rounded-full text-xs font-semibold text-gray-500 hover:text-gray-300 transition-colors flex items-center justify-center min-h-[48px] min-w-[48px] disabled:opacity-50"
+                >
+                  Clear
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handlePinDigitInput('0')}
+                  disabled={loading}
+                  className="w-16 h-16 rounded-full bg-slate-900 border border-slate-800 hover:bg-slate-800 hover:border-slate-750 active:scale-95 transition-all text-xl font-bold flex items-center justify-center min-h-[48px] min-w-[48px] disabled:opacity-50"
+                >
+                  0
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePinDelete}
+                  disabled={loading}
+                  className="w-16 h-16 rounded-full text-xs font-semibold text-gray-500 hover:text-gray-300 transition-colors flex items-center justify-center min-h-[48px] min-w-[48px] disabled:opacity-50"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+
+            {/* Back action */}
+            {lockoutTime === null && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPinNumpad(false)
+                  setEnteredPin([])
+                  setError(null)
+                }}
+                className="text-xs text-gray-500 hover:text-gray-300 transition-colors font-medium border-t border-slate-900 w-full pt-4 text-center mt-2"
+              >
+                Cancel & Return to Owner Login
+              </button>
+            )}
+
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

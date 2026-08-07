@@ -24,6 +24,7 @@ import {
   BookOpen
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useAccessMode } from '../contexts/AccessModeContext'
 import { supabase } from '../lib/supabaseClient'
 
 interface ChatMessage {
@@ -48,6 +49,24 @@ export default function Layout() {
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
+  const { accessMode } = useAccessMode()
+
+  // Redirect employee to pos if trying to access owner-only routes
+  useEffect(() => {
+    const ownerOnlyPaths = [
+      '/dashboard',
+      '/inventory',
+      '/expenses',
+      '/reports',
+      '/forecast',
+      '/settings',
+      '/debts',
+      '/sales'
+    ]
+    if (accessMode === 'employee' && ownerOnlyPaths.includes(location.pathname)) {
+      navigate('/pos', { replace: true })
+    }
+  }, [accessMode, location.pathname, navigate])
 
   // Theme State
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -418,50 +437,54 @@ export default function Layout() {
       )}
 
       {/* Persistent Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 h-16 glass-nav z-40 flex items-center justify-around px-2 shadow-2xl">
-        {mainTabs.map((tab) => {
-          const Icon = tab.icon
-          const active = isActive(tab.path)
-          return (
-            <Link
-              key={tab.path}
-              to={tab.path}
-              className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all min-h-[48px] ${
-                active ? 'text-indigo-400 scale-105' : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <Icon className="w-5 h-5 mb-1" />
-              <span className="text-[10px] font-semibold tracking-wide">{tab.name}</span>
-            </Link>
-          )
-        })}
+      {accessMode !== 'employee' && (
+        <nav className="fixed bottom-0 left-0 right-0 h-16 glass-nav z-40 flex items-center justify-around px-2 shadow-2xl">
+          {mainTabs.map((tab) => {
+            const Icon = tab.icon
+            const active = isActive(tab.path)
+            return (
+              <Link
+                key={tab.path}
+                to={tab.path}
+                className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all min-h-[48px] ${
+                  active ? 'text-indigo-400 scale-105' : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                <Icon className="w-5 h-5 mb-1" />
+                <span className="text-[10px] font-semibold tracking-wide">{tab.name}</span>
+              </Link>
+            )
+          })}
 
-        {/* More Tab */}
-        <button
-          onClick={() => setShowMoreMenu(!showMoreMenu)}
-          className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all min-h-[48px] ${
-            showMoreMenu || moreItems.some(i => isActive(i.path))
-              ? 'text-indigo-400 scale-105'
-              : 'text-gray-500 hover:text-gray-300'
-          }`}
-        >
-          <Menu className="w-5 h-5 mb-1" />
-          <span className="text-[10px] font-semibold tracking-wide flex items-center gap-0.5">
-            {t('nav.settings')} <ChevronUp className="w-3 h-3" />
-          </span>
-        </button>
-      </nav>
+          {/* More Tab */}
+          <button
+            onClick={() => setShowMoreMenu(!showMoreMenu)}
+            className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all min-h-[48px] ${
+              showMoreMenu || moreItems.some(i => isActive(i.path))
+                ? 'text-indigo-400 scale-105'
+                : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            <Menu className="w-5 h-5 mb-1" />
+            <span className="text-[10px] font-semibold tracking-wide flex items-center gap-0.5">
+              {t('nav.settings')} <ChevronUp className="w-3 h-3" />
+            </span>
+          </button>
+        </nav>
+      )}
 
       {/* Floating Chat Bubble Button: Fixed 80px above bottom nav */}
-      <button
-        onClick={() => setChatOpen(true)}
-        style={{ bottom: '80px' }}
-        className={`fixed p-3.5 bg-gradient-to-tr from-indigo-600 to-violet-500 hover:from-indigo-505 hover:to-violet-405 text-white rounded-full shadow-xl hover:scale-105 transition-all z-40 shadow-indigo-600/20 border border-indigo-400/25 min-h-[48px] min-w-[48px] flex items-center justify-center ${
-          isRTL ? 'left-5' : 'right-5'
-        }`}
-      >
-        <MessageSquare className="w-5.5 h-5.5" />
-      </button>
+      {accessMode !== 'employee' && (
+        <button
+          onClick={() => setChatOpen(true)}
+          style={{ bottom: '80px' }}
+          className={`fixed p-3.5 bg-gradient-to-tr from-indigo-600 to-violet-500 hover:from-indigo-505 hover:to-violet-405 text-white rounded-full shadow-xl hover:scale-105 transition-all z-40 shadow-indigo-600/20 border border-indigo-400/25 min-h-[48px] min-w-[48px] flex items-center justify-center ${
+            isRTL ? 'left-5' : 'right-5'
+          }`}
+        >
+          <MessageSquare className="w-5.5 h-5.5" />
+        </button>
+      )}
 
       {/* AI Assistant Drawer Component */}
       {chatOpen && (

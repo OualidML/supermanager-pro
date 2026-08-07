@@ -10,33 +10,37 @@ import Reports from './pages/Reports'
 import Forecast from './pages/Forecast'
 import Settings from './pages/Settings'
 import Debts from './pages/Debts'
+import { AccessModeProvider } from './contexts/AccessModeContext'
 
 export default function App() {
   return (
-    <Router>
-      <Routes>
-        {/* Public Login Route */}
-        <Route path="/login" element={<Login />} />
+    <AccessModeProvider>
+      <Router>
+        <Routes>
+          {/* Public Login Route */}
+          <Route path="/login" element={<Login />} />
 
-        {/* Onboarding Wizard Route */}
-        <Route path="/onboarding" element={<Onboarding />} />
+          {/* Onboarding Wizard Route */}
+          <Route path="/onboarding" element={<Onboarding />} />
 
-        {/* Persistent Layout and Child Views */}
-        <Route element={<Layout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/sales" element={<Sales />} />
-          <Route path="/inventory" element={<Inventory />} />
-          <Route path="/expenses" element={<Expenses />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/forecast" element={<Forecast />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/debts" element={<Debts />} />
-        </Route>
+          {/* Persistent Layout and Child Views */}
+          <Route element={<Layout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/sales" element={<Sales />} />
+            <Route path="/inventory" element={<Inventory />} />
+            <Route path="/expenses" element={<Expenses />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/forecast" element={<Forecast />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/debts" element={<Debts />} />
+            <Route path="/pos" element={<Sales />} />
+          </Route>
 
-        {/* Default Catch-all Routing */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </Router>
+          {/* Default Catch-all Routing */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Router>
+    </AccessModeProvider>
   )
 }
