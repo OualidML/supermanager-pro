@@ -451,9 +451,9 @@ export default function Debts() {
 
                 <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between border-t sm:border-t-0 border-slate-850 pt-3 sm:pt-0 gap-4">
                   <div className="text-left sm:text-right space-y-1">
-                    <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider block">Details</span>
+                    <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider block">{t('debts.details_header')}</span>
                     <div className="flex gap-2.5 items-baseline text-xs">
-                      <span className="text-gray-400">Total:</span>
+                      <span className="text-gray-400">{t('debts.total_label')}</span>
                       <span className="font-mono text-white">{currency}{debt.total_amount.toFixed(2)}</span>
                     </div>
                     {debt.status !== 'paid' ? (

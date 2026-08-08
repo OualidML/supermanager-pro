@@ -143,7 +143,18 @@
     "frequency_label": "Fréquence du Prélèvement",
     "btn_log": "Enregistrer",
     "history_title": "Historique des Paiements",
-    "empty": "Aucune charge enregistrée."
+    "empty": "Aucune charge enregistrée.",
+    "cat_rent": "Loyer",
+    "cat_electricity": "Électricité",
+    "cat_water": "Eau",
+    "cat_salaries": "Salaires",
+    "cat_supplies": "Fournitures",
+    "cat_transport": "Transport",
+    "cat_maintenance": "Maintenance",
+    "cat_other": "Autre",
+    "int_weekly": "Intervalle Hebdomadaire",
+    "int_monthly": "Intervalle Mensuel",
+    "int_yearly": "Intervalle Annuel"
   },
   "reports": {
     "title": "Rapports de Performance",
@@ -216,6 +227,10 @@
     "customer_phone": "Téléphone du Client (Optionnel)",
     "btn_on_credit": "À Crédit",
     "credit_sale_title": "Vente À Crédit",
-    "btn_confirm_credit": "Confirmer la Vente à Crédit"
+    "btn_confirm_credit": "Confirmer la Vente à Crédit",
+    "details_header": "Détails",
+    "total_label": "Total:",
+    "name_placeholder": "ex. Jean Dupont",
+    "phone_placeholder": "ex. +33 6 1234 5678"
   }
 }

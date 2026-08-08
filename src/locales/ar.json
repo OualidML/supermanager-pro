@@ -143,7 +143,18 @@
     "frequency_label": "دورية التكرار",
     "btn_log": "تسجيل المصاريف",
     "history_title": "سجل الدفعات والمصاريف",
-    "empty": "لم يتم تسجيل أي مصاريف بعد."
+    "empty": "لم يتم تسجيل أي مصاريف بعد.",
+    "cat_rent": "الإيجار",
+    "cat_electricity": "الكهرباء",
+    "cat_water": "الماء",
+    "cat_salaries": "الرواتب",
+    "cat_supplies": "المستلزمات",
+    "cat_transport": "النقل والمواصلات",
+    "cat_maintenance": "الصيانة",
+    "cat_other": "أخرى",
+    "int_weekly": "تكرار أسبوعي",
+    "int_monthly": "تكرار شهري",
+    "int_yearly": "تكرار سنوي"
   },
   "reports": {
     "title": "تقارير الأداء",
@@ -216,6 +227,10 @@
     "customer_phone": "رقم هاتف العميل (اختياري)",
     "btn_on_credit": "بيع بالآجل",
     "credit_sale_title": "إتمام البيع بالآجل",
-    "btn_confirm_credit": "تأكيد البيع بالآجل"
+    "btn_confirm_credit": "تأكيد البيع بالآجل",
+    "details_header": "التفاصيل",
+    "total_label": "الإجمالي:",
+    "name_placeholder": "مثال: أحمد محمد",
+    "phone_placeholder": "مثال: 0555123456"
   }
 }

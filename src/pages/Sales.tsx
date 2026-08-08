@@ -800,30 +800,30 @@ export default function Sales() {
 
             <form onSubmit={handleCreditCheckout} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="text-gray-400 font-semibold">Customer Name (Required)</label>
+                <label className="text-gray-400 font-semibold">{t('debts.customer_name')}</label>
                 <input
                   type="text"
                   required
                   value={creditCustomerName}
                   onChange={(e) => setCreditCustomerName(e.target.value)}
-                  placeholder="e.g. John Doe"
+                  placeholder={t('debts.name_placeholder')}
                   className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-gray-400 font-semibold">Phone Number (Optional)</label>
+                <label className="text-gray-400 font-semibold">{t('debts.customer_phone')}</label>
                 <input
                   type="tel"
                   value={creditCustomerPhone}
                   onChange={(e) => setCreditCustomerPhone(e.target.value)}
-                  placeholder="e.g. +1 555-0199"
+                  placeholder={t('debts.phone_placeholder')}
                   className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-gray-400 font-semibold">Initial Cash Deposit (Optional)</label>
+                <label className="text-gray-400 font-semibold">{t('debts.upfront_payment')}</label>
                 <input
                   type="number"
                   step="0.01"

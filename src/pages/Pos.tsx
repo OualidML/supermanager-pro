@@ -746,7 +746,7 @@ export default function Pos() {
                   required
                   value={creditCustomerName}
                   onChange={(e) => setCreditCustomerName(e.target.value)}
-                  placeholder="e.g. John Doe"
+                  placeholder={t('debts.name_placeholder')}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-amber-500 min-h-[48px]"
                 />
               </div>
@@ -757,7 +757,7 @@ export default function Pos() {
                   type="tel"
                   value={creditCustomerPhone}
                   onChange={(e) => setCreditCustomerPhone(e.target.value)}
-                  placeholder="e.g. +213 555 123 456"
+                  placeholder={t('debts.phone_placeholder')}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-amber-500 min-h-[48px]"
                 />
               </div>
@@ -775,7 +775,7 @@ export default function Pos() {
               </div>
 
               <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850 flex justify-between items-center text-xs font-mono">
-                <span className="text-gray-400">Total Due:</span>
+                <span className="text-gray-400">{t('debts.total_label')}</span>
                 <span className="text-white font-extrabold text-sm">{currency}{subtotal.toFixed(2)}</span>
               </div>
 

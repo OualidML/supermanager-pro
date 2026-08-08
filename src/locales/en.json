@@ -143,7 +143,18 @@
     "frequency_label": "Overhead Interval Frequency",
     "btn_log": "Log Expense",
     "history_title": "Ledger Payment History",
-    "empty": "No historical expense records logged."
+    "empty": "No historical expense records logged.",
+    "cat_rent": "Rent",
+    "cat_electricity": "Electricity",
+    "cat_water": "Water",
+    "cat_salaries": "Salaries",
+    "cat_supplies": "Supplies",
+    "cat_transport": "Transport",
+    "cat_maintenance": "Maintenance",
+    "cat_other": "Other",
+    "int_weekly": "Weekly Interval",
+    "int_monthly": "Monthly Interval",
+    "int_yearly": "Yearly Interval"
   },
   "reports": {
     "title": "Performance Reports",
@@ -216,6 +227,10 @@
     "customer_phone": "Customer Phone (Optional)",
     "btn_on_credit": "On Credit",
     "credit_sale_title": "Sell On Credit",
-    "btn_confirm_credit": "Confirm Credit Sale"
+    "btn_confirm_credit": "Confirm Credit Sale",
+    "details_header": "Details",
+    "total_label": "Total:",
+    "name_placeholder": "e.g. John Doe",
+    "phone_placeholder": "e.g. +1 555-0199"
   }
 }

@@ -478,14 +478,14 @@ export default function Expenses() {
                   onChange={(e) => setCategory(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-855 rounded-lg py-3 px-3 text-white focus:outline-none min-h-[48px]"
                 >
-                  <option value="Rent">Rent</option>
-                  <option value="Electricity">Electricity</option>
-                  <option value="Water">Water</option>
-                  <option value="Salaries">Salaries</option>
-                  <option value="Supplies">Supplies</option>
-                  <option value="Transport">Transport</option>
-                  <option value="Maintenance">Maintenance</option>
-                  <option value="Other">Other</option>
+                  <option value="Rent">{t('expenses.cat_rent')}</option>
+                  <option value="Electricity">{t('expenses.cat_electricity')}</option>
+                  <option value="Water">{t('expenses.cat_water')}</option>
+                  <option value="Salaries">{t('expenses.cat_salaries')}</option>
+                  <option value="Supplies">{t('expenses.cat_supplies')}</option>
+                  <option value="Transport">{t('expenses.cat_transport')}</option>
+                  <option value="Maintenance">{t('expenses.cat_maintenance')}</option>
+                  <option value="Other">{t('expenses.cat_other')}</option>
                 </select>
               </div>
             </div>
@@ -525,9 +525,9 @@ export default function Expenses() {
                   onChange={(e) => setFrequency(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-855 rounded-lg py-3 px-3 text-white focus:outline-none min-h-[48px]"
                 >
-                  <option value="Weekly">Weekly Interval</option>
-                  <option value="Monthly">Monthly Interval</option>
-                  <option value="Yearly">Yearly Interval</option>
+                  <option value="Weekly">{t('expenses.int_weekly')}</option>
+                  <option value="Monthly">{t('expenses.int_monthly')}</option>
+                  <option value="Yearly">{t('expenses.int_yearly')}</option>
                 </select>
               </div>
             )}
@@ -595,14 +595,14 @@ export default function Expenses() {
                             {exp.title}
                             {exp.recurring && (
                               <span className="text-[8px] font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.2 rounded-full uppercase tracking-wider">
-                                {exp.frequency || 'Recurring'}
+                                {exp.frequency ? t(`expenses.int_${exp.frequency.toLowerCase()}`) : t('expenses.recurring_label')}
                               </span>
                             )}
                           </div>
                           <div className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-1.5">
-                            <span className="font-medium text-gray-400">{exp.category}</span>
+                            <span className="font-medium text-gray-400">{t(`expenses.cat_${exp.category.toLowerCase()}`)}</span>
                             <span>•</span>
-                            <span>{new Date(exp.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                            <span>{new Date(exp.date).toLocaleDateString(i18n.language, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
                           </div>
                         </div>
                       </div>
