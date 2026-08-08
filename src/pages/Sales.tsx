@@ -420,8 +420,20 @@ export default function Sales() {
       const totalVal = total
       const depositVal = parseFloat(creditDeposit) || 0
 
-      // 1. Create text items summary
-      const summary = cart.map(item => `${item.quantity}x ${item.name} (${currency}${item.price.toFixed(2)})`).join(', ')
+      // 1. Create serialized items & initial payments summary JSON
+      const summary = JSON.stringify({
+        products: cart.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price
+        })),
+        payments: [
+          {
+            amount: depositVal,
+            date: new Date().toISOString()
+          }
+        ]
+      })
 
       // 2. Insert into customer_debts table
       const { error: debtErr } = await supabase

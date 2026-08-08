@@ -207,6 +207,15 @@
     "btn_save_settle": "Save Repayment",
     "empty": "No outstanding customer debt logs registered.",
     "err_valid_amount": "Please enter a valid numeric payment amount.",
-    "success_settled": "Repayment logged successfully!"
+    "success_settled": "Repayment logged successfully!",
+    "products_bought": "Products Purchased",
+    "payment_history": "Payment History (Partitions)",
+    "remaining_balance": "Remaining Balance",
+    "upfront_payment": "Amount Paid Upfront",
+    "customer_name": "Customer Name",
+    "customer_phone": "Customer Phone (Optional)",
+    "btn_on_credit": "On Credit",
+    "credit_sale_title": "Sell On Credit",
+    "btn_confirm_credit": "Confirm Credit Sale"
   }
 }

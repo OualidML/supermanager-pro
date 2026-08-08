@@ -207,6 +207,15 @@
     "btn_save_settle": "حفظ السداد",
     "empty": "لا توجد سجلات ديون عملاء مستحقة.",
     "err_valid_amount": "يرجى إدخال مبلغ دفع رقمي صالح.",
-    "success_settled": "تم تسجيل دفعة السداد بنجاح!"
+    "success_settled": "تم تسجيل دفعة السداد بنجاح!",
+    "products_bought": "المنتجات المشتراة",
+    "payment_history": "سجل المدفوعات (الأقساط)",
+    "remaining_balance": "الرصيد المتبقي",
+    "upfront_payment": "المبلغ المدفوع مقدماً",
+    "customer_name": "اسم العميل",
+    "customer_phone": "رقم هاتف العميل (اختياري)",
+    "btn_on_credit": "بيع بالآجل",
+    "credit_sale_title": "إتمام البيع بالآجل",
+    "btn_confirm_credit": "تأكيد البيع بالآجل"
   }
 }

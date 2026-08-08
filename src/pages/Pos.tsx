@@ -11,7 +11,8 @@ import {
   AlertCircle,
   Volume2,
   X,
-  Sparkles
+  Sparkles,
+  Receipt
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { BrowserMultiFormatReader } from '@zxing/browser'
@@ -29,7 +30,7 @@ interface CartItem {
 }
 
 export default function Pos() {
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { accessMode, setAccessMode } = useAccessMode()
   
@@ -48,6 +49,13 @@ export default function Pos() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [success, setSuccess] = useState(false)
   const [cartError, setCartError] = useState<string | null>(null)
+
+  // Credit Checkout states
+  const [showCreditModal, setShowCreditModal] = useState(false)
+  const [creditCustomerName, setCreditCustomerName] = useState('')
+  const [creditCustomerPhone, setCreditCustomerPhone] = useState('')
+  const [creditDeposit, setCreditDeposit] = useState('')
+  const [creditLoading, setCreditLoading] = useState(false)
 
   // Scanner states
   const [isScanning, setIsScanning] = useState(false)
@@ -355,6 +363,86 @@ export default function Pos() {
     }
   }
 
+  // Credit sales checkout for employees
+  const handleCreditCheckout = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!creditCustomerName.trim()) return
+    setCartError(null)
+    setCreditLoading(true)
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('No authenticated user session found.')
+
+      const totalVal = subtotal
+      const depositVal = parseFloat(creditDeposit) || 0
+
+      // 1. Create serialized items & initial payments summary JSON
+      const summary = JSON.stringify({
+        products: cart.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price
+        })),
+        payments: [
+          {
+            amount: depositVal,
+            date: new Date().toISOString()
+          }
+        ]
+      })
+
+      // 2. Insert into customer_debts table
+      const { error: debtErr } = await supabase
+        .from('customer_debts')
+        .insert([{
+          owner_id: user.id,
+          customer_name: creditCustomerName,
+          customer_phone: creditCustomerPhone || null,
+          items_summary: summary,
+          total_amount: totalVal,
+          amount_paid: depositVal,
+          status: depositVal >= totalVal ? 'paid' : depositVal > 0 ? 'partially_paid' : 'unpaid'
+        }])
+
+      if (debtErr) throw debtErr
+
+      // 3. Decrement stock inventory quantities
+      await Promise.all(cart.map(item => {
+        const nextStock = Math.max(0, item.stock - item.quantity)
+        return supabase
+          .from('products')
+          .update({ stock: nextStock })
+          .eq('id', item.id)
+      }))
+
+      // 4. Success cleanup
+      setCreditLoading(false)
+      setShowCreditModal(false)
+      setCreditCustomerName('')
+      setCreditCustomerPhone('')
+      setCreditDeposit('')
+      setSuccess(true)
+      clearCart()
+
+      // Dispatch Success Toast
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: 'Credit sale registered successfully by employee!', type: 'success' }
+      }))
+
+      // Reload products list cache
+      fetchInitialData()
+
+      setTimeout(() => {
+        setSuccess(false)
+      }, 2500)
+
+    } catch (err: any) {
+      setCreditLoading(false)
+      setCartError(err.message || 'Credit checkout failed.')
+    }
+  }
+
   const handleExitEmployeeMode = () => {
     setAccessMode('owner')
     navigate('/login?exit=true')
@@ -538,22 +626,36 @@ export default function Pos() {
             <span className="font-extrabold text-2xl text-amber-500 font-mono">{currency}{subtotal.toFixed(2)}</span>
           </div>
 
-          {/* Large COMPLETE SALE Button */}
-          <button
-            type="button"
-            onClick={handleCompleteSale}
-            disabled={loading || cart.length === 0}
-            className="w-full h-20 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-extrabold rounded-2xl transition-all shadow-xl shadow-emerald-600/10 flex items-center justify-center gap-2 text-sm select-none active:scale-[0.98] min-h-[48px]"
-          >
-            {loading ? (
-              <span className="h-6 w-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                <Check className="w-6 h-6 stroke-[3]" />
-                <span className="tracking-wider">{getTranslation('complete_btn')}</span>
-              </>
-            )}
-          </button>
+          {/* Checkout Action Buttons Grid (Cash vs Credit) */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* On Credit Button */}
+            <button
+              type="button"
+              onClick={() => setShowCreditModal(true)}
+              disabled={loading || cart.length === 0}
+              className="h-20 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-slate-950 font-extrabold rounded-2xl transition-all shadow-xl shadow-amber-600/10 flex items-center justify-center gap-2 text-sm select-none active:scale-[0.98] min-h-[48px]"
+            >
+              <Receipt className="w-6 h-6 stroke-[2.5]" />
+              <span className="tracking-wider">{t('debts.btn_on_credit')}</span>
+            </button>
+
+            {/* Large COMPLETE SALE Button */}
+            <button
+              type="button"
+              onClick={handleCompleteSale}
+              disabled={loading || cart.length === 0}
+              className="h-20 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-extrabold rounded-2xl transition-all shadow-xl shadow-emerald-600/10 flex items-center justify-center gap-2 text-sm select-none active:scale-[0.98] min-h-[48px]"
+            >
+              {loading ? (
+                <span className="h-6 w-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Check className="w-6 h-6 stroke-[3]" />
+                  <span className="tracking-wider">{getTranslation('complete_btn')}</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
       </div>
@@ -613,6 +715,93 @@ export default function Pos() {
               </div>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* Credit Sale Modal Dialog */}
+      {showCreditModal && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-850 rounded-2xl p-6 shadow-2xl space-y-4 relative">
+            
+            <button
+              onClick={() => setShowCreditModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-1">
+              <h3 className="font-bold text-white text-base flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-amber-500" /> {t('debts.credit_sale_title')}
+              </h3>
+              <p className="text-[10px] text-gray-500">Record customer credentials to save this sale transaction on credit.</p>
+            </div>
+
+            <form onSubmit={handleCreditCheckout} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="text-gray-400 font-semibold">{t('debts.customer_name')}</label>
+                <input
+                  type="text"
+                  required
+                  value={creditCustomerName}
+                  onChange={(e) => setCreditCustomerName(e.target.value)}
+                  placeholder="e.g. John Doe"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-amber-500 min-h-[48px]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 font-semibold">{t('debts.customer_phone')}</label>
+                <input
+                  type="tel"
+                  value={creditCustomerPhone}
+                  onChange={(e) => setCreditCustomerPhone(e.target.value)}
+                  placeholder="e.g. +213 555 123 456"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-amber-500 min-h-[48px]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 font-semibold">{t('debts.upfront_payment')} ({currency})</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={creditDeposit}
+                  onChange={(e) => setCreditDeposit(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-amber-500 min-h-[48px]"
+                />
+              </div>
+
+              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850 flex justify-between items-center text-xs font-mono">
+                <span className="text-gray-400">Total Due:</span>
+                <span className="text-white font-extrabold text-sm">{currency}{subtotal.toFixed(2)}</span>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreditModal(false)}
+                  className="flex-1 bg-slate-950 border border-slate-800 text-gray-300 py-3 rounded-xl font-bold min-h-[48px]"
+                >
+                  {t('inventory.btn_cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={creditLoading}
+                  className="flex-1 bg-amber-600 hover:bg-amber-500 text-slate-950 py-3 rounded-xl font-bold flex items-center justify-center gap-1.5 min-h-[48px] disabled:opacity-50"
+                >
+                  {creditLoading ? (
+                    <span className="h-4 w-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      {t('debts.btn_confirm_credit')}
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

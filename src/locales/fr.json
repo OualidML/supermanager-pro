@@ -207,6 +207,15 @@
     "btn_save_settle": "Enregistrer le Remboursement",
     "empty": "Aucun enregistrement de dette client trouvé.",
     "err_valid_amount": "Veuillez entrer un montant de paiement numérique valide.",
-    "success_settled": "Remboursement enregistré avec succès!"
+    "success_settled": "Remboursement enregistré avec succès!",
+    "products_bought": "Produits Achetés",
+    "payment_history": "Historique des Paiements (Partitions)",
+    "remaining_balance": "Solde Restant",
+    "upfront_payment": "Montant Payé d'Avance",
+    "customer_name": "Nom du Client",
+    "customer_phone": "Téléphone du Client (Optionnel)",
+    "btn_on_credit": "À Crédit",
+    "credit_sale_title": "Vente À Crédit",
+    "btn_confirm_credit": "Confirmer la Vente à Crédit"
   }
 }

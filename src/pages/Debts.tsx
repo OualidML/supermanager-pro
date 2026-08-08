@@ -28,6 +28,40 @@ interface DebtItem {
   created_at: string
 }
 
+interface DebtDetails {
+  products: { name: string; quantity: number; price: number }[]
+  payments: { amount: number; date: string }[]
+  raw_summary?: string
+}
+
+function parseDebtSummary(summary: string, createdAt: string, initialPaid: number): DebtDetails {
+  try {
+    if (summary.trim().startsWith('{') || summary.trim().startsWith('[')) {
+      const parsed = JSON.parse(summary)
+      if (parsed && Array.isArray(parsed.products) && Array.isArray(parsed.payments)) {
+        return parsed as DebtDetails
+      }
+    }
+  } catch (e) {
+    // Ignore and fallback
+  }
+
+  // Fallback for older raw text records
+  const fallbackPayments = []
+  if (initialPaid > 0) {
+    fallbackPayments.push({
+      amount: initialPaid,
+      date: createdAt
+    })
+  }
+
+  return {
+    products: [],
+    payments: fallbackPayments,
+    raw_summary: summary
+  }
+}
+
 export default function Debts() {
   const { t, i18n } = useTranslation()
   const [loading, setLoading] = useState(true)
@@ -123,11 +157,46 @@ export default function Debts() {
         newStatus = 'partially_paid'
       }
 
+      // Parse and update the payment partitions history
+      let updatedSummary = targetDebt.items_summary
+      try {
+        if (targetDebt.items_summary.startsWith('{') || targetDebt.items_summary.startsWith('[')) {
+          const parsed = JSON.parse(targetDebt.items_summary)
+          if (parsed && Array.isArray(parsed.payments)) {
+            parsed.payments.push({
+              amount: parsedAmount,
+              date: new Date().toISOString()
+            })
+            updatedSummary = JSON.stringify(parsed)
+          }
+        } else {
+          const fallbackPayments = []
+          if (targetDebt.amount_paid > 0) {
+            fallbackPayments.push({
+              amount: targetDebt.amount_paid,
+              date: targetDebt.created_at
+            })
+          }
+          fallbackPayments.push({
+            amount: parsedAmount,
+            date: new Date().toISOString()
+          })
+          updatedSummary = JSON.stringify({
+            products: [],
+            raw_summary: targetDebt.items_summary,
+            payments: fallbackPayments
+          })
+        }
+      } catch (e) {
+        console.warn('JSON append failed, using raw:', e)
+      }
+
       const { error } = await supabase
         .from('customer_debts')
         .update({
           amount_paid: newAmountPaid,
-          status: newStatus
+          status: newStatus,
+          items_summary: updatedSummary
         })
         .eq('id', targetDebt.id)
 
@@ -329,10 +398,55 @@ export default function Debts() {
                     </div>
                   </div>
 
-                  <div className="text-[11px] text-gray-400 leading-normal max-w-lg">
-                    <span className="font-semibold block text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">{t('debts.items')}</span>
-                    {debt.items_summary}
-                  </div>
+                  {(() => {
+                    const details = parseDebtSummary(debt.items_summary, debt.created_at, debt.amount_paid)
+                    return (
+                      <div className="text-[11px] text-gray-400 leading-normal max-w-lg space-y-2 mt-2">
+                        <span className="font-semibold block text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">{t('debts.products_bought')}</span>
+                        {details.raw_summary ? (
+                          <div className="text-gray-300 font-semibold">{details.raw_summary}</div>
+                        ) : (
+                          <div className="border border-slate-850 rounded-xl overflow-hidden bg-slate-950/40 p-2 space-y-1">
+                            {details.products.map((p, idx) => (
+                              <div key={idx} className="flex justify-between items-center text-[10px]">
+                                <span className="text-white font-medium">{p.quantity}x {p.name}</span>
+                                <span className="text-gray-400 font-mono">{currency}{p.price.toFixed(2)} = <strong className="text-white">{currency}{(p.quantity * p.price).toFixed(2)}</strong></span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Timeline partition history */}
+                        {details.payments && details.payments.length > 0 && (
+                          <div className="space-y-1.5 pt-2">
+                            <span className="font-semibold block text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">{t('debts.payment_history')}</span>
+                            <div className="space-y-1.5 text-[10px] border-l-2 border-slate-800 pl-3 ml-1.5 font-mono">
+                              {(() => {
+                                let cumulativePaid = 0
+                                return details.payments.map((pmt, pIdx) => {
+                                  cumulativePaid += pmt.amount
+                                  const currentRemaining = Math.max(0, debt.total_amount - cumulativePaid)
+                                  return (
+                                    <div key={pIdx} className="relative flex flex-col sm:flex-row sm:justify-between sm:items-center text-gray-400 py-0.5">
+                                      {/* timeline bullet dot */}
+                                      <div className="absolute -left-[17px] top-[7px] w-2 h-2 rounded-full bg-indigo-500 border border-slate-950" />
+                                      <span className="text-white font-semibold">
+                                        {i18n.language === 'ar' ? `تم دفع ${currency}${pmt.amount.toFixed(2)}` : i18n.language === 'fr' ? `Payé ${currency}${pmt.amount.toFixed(2)}` : `Paid ${currency}${pmt.amount.toFixed(2)}`}
+                                      </span>
+                                      <span className="text-gray-500 text-[9px] mt-0.5 sm:mt-0 flex gap-2">
+                                        {new Date(pmt.date).toLocaleString(i18n.language, { dateStyle: 'short', timeStyle: 'short' })}
+                                        <span className="text-indigo-400 font-semibold">({t('debts.remaining_balance')}: {currency}{currentRemaining.toFixed(2)})</span>
+                                      </span>
+                                    </div>
+                                  )
+                                })
+                              })()}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between border-t sm:border-t-0 border-slate-850 pt-3 sm:pt-0 gap-4">
