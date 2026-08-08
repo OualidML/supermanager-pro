@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ShoppingCart,
@@ -234,6 +234,50 @@ export default function Sales() {
 
     addToCart(product)
   }
+
+  const handleBarcodeScannedRef = useRef(handleBarcodeScanned)
+  useEffect(() => {
+    handleBarcodeScannedRef.current = handleBarcodeScanned
+  }, [handleBarcodeScanned])
+
+  // Global keypress listener interceptor for hardware barcode scanners
+  useEffect(() => {
+    let buffer = ''
+    let lastKeyTime = Date.now()
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement
+      if (activeEl && (
+        activeEl.tagName === 'INPUT' || 
+        activeEl.tagName === 'TEXTAREA' || 
+        activeEl.tagName === 'SELECT' ||
+        activeEl.getAttribute('contenteditable') === 'true'
+      )) {
+        return
+      }
+
+      const currentTime = Date.now()
+      if (currentTime - lastKeyTime > 50) {
+        buffer = ''
+      }
+      lastKeyTime = currentTime
+
+      if (e.key.length === 1) {
+        buffer += e.key
+      } else if (e.key === 'Enter') {
+        if (buffer.trim().length >= 3) {
+          e.preventDefault()
+          handleBarcodeScannedRef.current(buffer.trim())
+        }
+        buffer = ''
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown)
+    }
+  }, [])
 
   // Handle Manual query search autocomplete suggestions
   const handleSearchQueryChange = (val: string) => {
