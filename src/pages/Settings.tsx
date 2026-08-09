@@ -327,6 +327,35 @@ export default function Settings() {
     reader.readAsText(file)
   }
 
+  const handleClearTestSalesAndInvoices = async () => {
+    if (!window.confirm('Are you sure you want to clear all test sales, delivery notes (BL), invoices, and test debts? Your 528 products catalog will NOT be deleted.')) {
+      return
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('No active user session.')
+
+      // Delete invoices
+      await supabase.from('invoices').delete().eq('owner_id', user.id)
+      // Delete delivery notes
+      await supabase.from('delivery_notes').delete().eq('owner_id', user.id)
+      // Delete sales
+      await supabase.from('sales').delete().eq('owner_id', user.id)
+      // Delete customer debts
+      await supabase.from('customer_debts').delete().eq('owner_id', user.id)
+      // Delete expenses
+      await supabase.from('expenses').delete().eq('owner_id', user.id)
+
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: 'All test sales, BLs, invoices, and debts cleared successfully!', type: 'success' }
+      }))
+    } catch (e: any) {
+      console.error('Clear test data error:', e)
+      alert(e.message || 'Failed to clear test data.')
+    }
+  }
+
   const isRTL = i18n.language === 'ar'
 
   return (
