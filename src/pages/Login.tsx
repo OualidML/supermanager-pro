@@ -71,35 +71,56 @@ export default function Login() {
       setLoading(true)
       setError(null)
       try {
+        let isPinCorrect = false
         let ownerId: string | null = null
         let validPin: string | null = null
         let profileRecord: any = null
 
-        const { data: { session } } = await supabase.auth.getSession()
-        const user = session?.user
-
-        if (user) {
-          ownerId = user.id
-          localStorage.setItem('terminal_store_owner_id', user.id)
-          const { data: profile } = await supabase
-            .from('store_profiles')
-            .select('id, employee_pin')
-            .eq('owner_id', user.id)
-            .maybeSingle()
-
-          if (profile) {
-            profileRecord = profile
-            validPin = profile.employee_pin
-            if (validPin) localStorage.setItem('terminal_employee_pin', validPin)
+        // 1. Try Cloud Multi-Device PIN verification first
+        try {
+          const { data: rpcData, error: rpcErr } = await supabase.rpc('verify_employee_pin', { input_pin: pinStr })
+          if (!rpcErr && rpcData && rpcData.success) {
+            isPinCorrect = true
+            if (rpcData.owner_id) {
+              localStorage.setItem('terminal_store_owner_id', rpcData.owner_id)
+            }
+            if (rpcData.currency) {
+              localStorage.setItem('store_currency', rpcData.currency)
+            }
+            localStorage.setItem('terminal_employee_pin', pinStr)
           }
-        } else {
-          ownerId = localStorage.getItem('terminal_store_owner_id')
-          validPin = localStorage.getItem('terminal_employee_pin') || localStorage.getItem('employee_pin') || '1234'
+        } catch (rpcEx) {
+          console.warn('Cloud PIN check fallback to local:', rpcEx)
         }
 
-        const savedTerminalPin = localStorage.getItem('terminal_employee_pin') || localStorage.getItem('employee_pin')
-        const activePin = (validPin || savedTerminalPin || '1234').trim()
-        const isPinCorrect = pinStr.trim() === activePin || pinStr.trim() === '1234'
+        // 2. Fallback to Local Terminal Verification
+        if (!isPinCorrect) {
+          const { data: { session } } = await supabase.auth.getSession()
+          const user = session?.user
+
+          if (user) {
+            ownerId = user.id
+            localStorage.setItem('terminal_store_owner_id', user.id)
+            const { data: profile } = await supabase
+              .from('store_profiles')
+              .select('id, employee_pin')
+              .eq('owner_id', user.id)
+              .maybeSingle()
+
+            if (profile) {
+              profileRecord = profile
+              validPin = profile.employee_pin
+              if (validPin) localStorage.setItem('terminal_employee_pin', validPin)
+            }
+          } else {
+            ownerId = localStorage.getItem('terminal_store_owner_id')
+            validPin = localStorage.getItem('terminal_employee_pin') || localStorage.getItem('employee_pin') || '1234'
+          }
+
+          const savedTerminalPin = localStorage.getItem('terminal_employee_pin') || localStorage.getItem('employee_pin')
+          const activePin = (validPin || savedTerminalPin || '1234').trim()
+          isPinCorrect = pinStr.trim() === activePin || pinStr.trim() === '1234'
+        }
 
         if (isPinCorrect) {
           if (profileRecord) {
