@@ -286,14 +286,16 @@ export default function Login() {
         className="w-full max-w-md glass rounded-2xl p-8 space-y-6 shadow-2xl relative z-10 transition-all duration-300"
       >
         <div className="text-center space-y-2">
-          <div className="mx-auto w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
-            <Building2 className="w-6 h-6 text-indigo-400" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">
-            SuperManager Pro
+          <img
+            src="/logo.jpg"
+            alt="Houari Achaach Emblem"
+            className="mx-auto w-16 h-16 rounded-full object-cover shadow-2xl border-2 border-amber-500/50"
+          />
+          <h1 className="text-xl font-black tracking-tight text-white uppercase">
+            HOUARI ACHAACH
           </h1>
-          <p className="text-sm text-gray-400">
-            {t('nav.settings')}
+          <p className="text-xs text-amber-400 font-bold uppercase tracking-wider">
+            Paint Shop &amp; PVC Solutions
           </p>
         </div>
 

@@ -379,13 +379,17 @@ export default function Billing() {
       </head>
       <body onload="window.print();">
         <div class="header">
-          <div>
-            <div class="store-name">${storeName}</div>
-            <div style="font-size: 11px; color: #64748b;">Commerce & Distribution Matériaux</div>
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <img src="/logo.jpg" style="width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid #d97706;" alt="Houari Achaach" />
+            <div>
+              <div class="store-name">HOUARI ACHAACH</div>
+              <div style="font-size: 11px; font-weight: bold; color: #d97706; text-transform: uppercase; letter-spacing: 0.5px;">PAINT SHOP &amp; PVC SOLUTIONS</div>
+              <div style="font-size: 10px; color: #64748b; margin-top: 1px;">Commerce, Distribution Peinture, Quincaillerie &amp; Sanitaire</div>
+            </div>
           </div>
-          <div>
+          <div style="text-align: right;">
             <div class="doc-type">BON DE LIVRAISON</div>
-            <div style="font-size: 11px; color: #64748b;">N°: BL-${bl.id.slice(0, 8).toUpperCase()}</div>
+            <div style="font-size: 11px; color: #64748b; font-weight: bold;">N°: BL-${bl.id.slice(0, 8).toUpperCase()}</div>
             <div style="font-size: 11px; color: #64748b;">Date: ${new Date(bl.created_at).toLocaleDateString()}</div>
           </div>
         </div>
@@ -479,13 +483,17 @@ export default function Billing() {
       </head>
       <body onload="window.print();">
         <div class="header">
-          <div>
-            <div class="store-name">${storeName}</div>
-            <div style="font-size: 11px; color: #64748b;">Facturation Commerciale & Matériaux</div>
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <img src="/logo.jpg" style="width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid #059669;" alt="Houari Achaach" />
+            <div>
+              <div class="store-name" style="color: #065f46;">HOUARI ACHAACH</div>
+              <div style="font-size: 11px; font-weight: bold; color: #d97706; text-transform: uppercase; letter-spacing: 0.5px;">PAINT SHOP &amp; PVC SOLUTIONS</div>
+              <div style="font-size: 10px; color: #64748b; margin-top: 1px;">Commerce, Distribution Peinture, Quincaillerie &amp; Sanitaire</div>
+            </div>
           </div>
-          <div>
+          <div style="text-align: right;">
             <div class="doc-type">FACTURE OFFICIELLE</div>
-            <div style="font-size: 11px; color: #64748b;">N°: FAC-${inv.id.slice(0, 8).toUpperCase()}</div>
+            <div style="font-size: 11px; color: #64748b; font-weight: bold;">N°: FAC-${inv.id.slice(0, 8).toUpperCase()}</div>
             <div style="font-size: 11px; color: #64748b;">Date: ${new Date(inv.created_at).toLocaleDateString()}</div>
           </div>
         </div>

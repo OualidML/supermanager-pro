@@ -347,15 +347,18 @@ export default function Layout() {
       {/* Top Header Bar */}
       <header className="fixed top-0 left-0 right-0 h-16 glass-header z-40 flex items-center justify-between px-4 sm:px-6 shadow-md">
         <div className="flex items-center gap-3">
-          {/* Dynamic auto-generated logo */}
-          <div className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${logoGradientClass} flex items-center justify-center shadow-md text-white font-bold text-sm tracking-wide`}>
-            {initials}
-          </div>
+          <img
+            src="/logo.jpg"
+            alt="Houari Achaach Logo"
+            className="w-10 h-10 rounded-full object-cover shadow-md border-2 border-amber-500/40 flex-shrink-0 hover:scale-105 transition-transform"
+          />
           <div>
-            <h1 className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
-              {storeName}
+            <h1 className="text-sm font-black text-white tracking-tight flex items-center gap-1.5">
+              {storeName || 'HOUARI ACHAACH'}
             </h1>
-            <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">SuperManager Pro</span>
+            <span className="text-[9.5px] text-amber-400 font-bold uppercase tracking-wider block">
+              PAINT SHOP &amp; PVC SOLUTIONS
+            </span>
           </div>
         </div>
 
