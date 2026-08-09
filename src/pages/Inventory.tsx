@@ -31,6 +31,10 @@ interface ProductItem {
   stock: number
   min_stock: number
   price: number
+  wholesale_price: number | null
+  special_price: number | null
+  expiration_date: string | null
+  warehouse_location: string | null
   category: string
   costPrice: number
   profitMargin: number
@@ -57,7 +61,7 @@ export default function Inventory() {
   const [showRestockModal, setShowRestockModal] = useState(false)
   const [targetProduct, setTargetProduct] = useState<ProductItem | null>(null)
 
-  // Add Product Form inputs
+  // Add/Edit Product Form inputs
   const [newName, setNewName] = useState('')
   const [newSku, setNewSku] = useState('')
   const [newPrice, setNewPrice] = useState('')
@@ -65,6 +69,10 @@ export default function Inventory() {
   const [newStock, setNewStock] = useState('')
   const [newMinStock, setNewMinStock] = useState('')
   const [newCategory, setNewCategory] = useState('General')
+  const [newWholesalePrice, setNewWholesalePrice] = useState('')
+  const [newSpecialPrice, setNewSpecialPrice] = useState('')
+  const [newExpirationDate, setNewExpirationDate] = useState('')
+  const [newWarehouseLocation, setNewWarehouseLocation] = useState('')
 
   // Restock Form inputs
   const [restockQty, setRestockQty] = useState('')
@@ -143,6 +151,10 @@ export default function Inventory() {
           stock: p.stock,
           min_stock: p.min_stock,
           price: sellPrice,
+          wholesale_price: p.wholesale_price ? parseFloat(p.wholesale_price) : null,
+          special_price: p.special_price ? parseFloat(p.special_price) : null,
+          expiration_date: p.expiration_date || null,
+          warehouse_location: p.warehouse_location || null,
           category: p.category || 'General',
           costPrice: cost,
           profitMargin: parseFloat(profitMargin.toFixed(1)),
@@ -292,7 +304,11 @@ export default function Inventory() {
           price: parsedPrice,
           stock: parsedStock,
           min_stock: parsedMinStock,
-          category: newCategory
+          category: newCategory,
+          wholesale_price: parseFloat(newWholesalePrice) || null,
+          special_price: parseFloat(newSpecialPrice) || null,
+          expiration_date: newExpirationDate || null,
+          warehouse_location: newWarehouseLocation || null
         }])
         .select()
 
@@ -328,6 +344,10 @@ export default function Inventory() {
       setNewStock('')
       setNewMinStock('')
       setNewCategory('General')
+      setNewWholesalePrice('')
+      setNewSpecialPrice('')
+      setNewExpirationDate('')
+      setNewWarehouseLocation('')
 
       fetchInventory()
       setTimeout(() => setSuccessMsg(''), 2500)
@@ -649,11 +669,39 @@ export default function Inventory() {
             if (stockRatio < 20) progressColor = 'bg-rose-500'
             else if (stockRatio >= 20 && stockRatio <= 50) progressColor = 'bg-amber-500'
 
+            // expiration calculation
+            let expBadge = null
+            if (prod.expiration_date) {
+              const today = new Date()
+              const expDate = new Date(prod.expiration_date)
+              const diffDays = Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+              
+              if (diffDays <= 0) {
+                expBadge = (
+                  <span className="bg-red-500/10 border border-red-500/25 text-red-400 font-bold px-2 py-0.5 rounded-full text-[8px] animate-pulse uppercase tracking-wider">
+                    Expired
+                  </span>
+                )
+              } else if (diffDays <= 30) {
+                expBadge = (
+                  <span className="bg-amber-500/10 border border-amber-500/25 text-amber-400 font-bold px-2 py-0.5 rounded-full text-[8px]">
+                    Exp: {diffDays}d
+                  </span>
+                )
+              } else {
+                expBadge = (
+                  <span className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-medium px-2 py-0.5 rounded-full text-[8px]">
+                    Exp: {prod.expiration_date}
+                  </span>
+                )
+              }
+            }
+
             return (
               <div
                 key={prod.id}
                 className={`glass rounded-2xl p-5 border shadow-xl flex flex-col justify-between transition-all duration-300 relative overflow-hidden ${
-                  isLowStock ? 'pulse-red-card border-rose-500/30' : 'border-slate-900/60 hover:border-slate-800'
+                  isLowStock ? 'border-rose-500/30 bg-rose-500/5 shadow-rose-950/5' : 'border-slate-900/60 hover:border-slate-800'
                 }`}
               >
                 
@@ -661,7 +709,7 @@ export default function Inventory() {
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="font-extrabold text-white text-sm line-clamp-1 block">{prod.name}</h3>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
                       <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-gray-400">
                         {prod.category}
                       </span>
@@ -670,14 +718,22 @@ export default function Inventory() {
                           <Barcode className="w-3 h-3 text-indigo-400" /> {prod.sku}
                         </span>
                       )}
+                      {prod.warehouse_location && (
+                        <span className="text-[9px] text-gray-500 font-semibold font-sans">
+                          • Location: <strong className="text-white font-medium">{prod.warehouse_location}</strong>
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {isLowStock && (
-                    <div className="p-1 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[8px] font-black uppercase tracking-wider flex items-center gap-1 animate-pulse">
-                      <AlertTriangle className="w-3 h-3" /> Low Stock
-                    </div>
-                  )}
+                  <div className="flex flex-col gap-1.5 items-end">
+                    {isLowStock && (
+                      <div className="p-1 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[8px] font-black uppercase tracking-wider flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> Low Stock
+                      </div>
+                    )}
+                    {expBadge}
+                  </div>
                 </div>
 
                 {/* Performance values */}
@@ -700,12 +756,24 @@ export default function Inventory() {
                   </div>
                 </div>
 
+                {/* Pricing tiers details if present */}
+                {(prod.wholesale_price || prod.special_price) && (
+                  <div className="flex justify-between items-center bg-slate-950/20 border border-slate-900 rounded-lg p-2.5 mb-3.5 text-[10px] text-gray-400 font-mono">
+                    {prod.wholesale_price ? (
+                      <span>Prix Gros: <strong className="text-white">{currency}{prod.wholesale_price.toFixed(2)}</strong></span>
+                    ) : <span />}
+                    {prod.special_price ? (
+                      <span>Prix Spécial: <strong className="text-white">{currency}{prod.special_price.toFixed(2)}</strong></span>
+                    ) : <span />}
+                  </div>
+                )}
+
                 {/* Stock progress & controls */}
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex-1 mr-4">
                     <div className="flex justify-between text-[10px] text-gray-400 mb-1">
                       <span>{t('inventory.stock')}</span>
-                      <span className="font-bold text-white">{prod.stock} units</span>
+                      <span className={`font-bold ${isLowStock ? 'text-rose-400' : 'text-white'}`}>{prod.stock} units</span>
                     </div>
                     <div className="h-1.5 w-full bg-slate-950 border border-slate-900 rounded-full overflow-hidden p-0.5">
                       <div
@@ -720,7 +788,7 @@ export default function Inventory() {
                       setTargetProduct(prod)
                       setShowRestockModal(true)
                     }}
-                    className="bg-slate-900 border border-slate-800 hover:bg-slate-850 text-white font-bold py-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 text-[10px]"
+                    className="bg-slate-900 border border-slate-800 hover:bg-slate-850 text-white font-bold py-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 text-[10px] min-h-[36px]"
                   >
                     <RotateCcw className="w-3 h-3 text-indigo-400" /> Restock
                   </button>
@@ -848,6 +916,53 @@ export default function Inventory() {
                     onChange={(e) => setNewCategory(e.target.value)}
                     placeholder="General"
                     className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-2 text-white min-h-[48px]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-gray-400 font-semibold">Wholesale Price (Prix Gros)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newWholesalePrice}
+                    onChange={(e) => setNewWholesalePrice(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-gray-400 font-semibold">Special Price (Prix Spécial)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newSpecialPrice}
+                    onChange={(e) => setNewSpecialPrice(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-gray-400 font-semibold">Expiration Date</label>
+                  <input
+                    type="date"
+                    value={newExpirationDate}
+                    onChange={(e) => setNewExpirationDate(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-gray-400 font-semibold">Warehouse Location</label>
+                  <input
+                    type="text"
+                    value={newWarehouseLocation}
+                    onChange={(e) => setNewWarehouseLocation(e.target.value)}
+                    placeholder="e.g. Shelving A-12"
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
                   />
                 </div>
               </div>

@@ -10,7 +10,6 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
-  const [isSignUp, setIsSignUp] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [infoMessage, setInfoMessage] = useState<string | null>(null)
@@ -157,60 +156,35 @@ export default function Login() {
     }
 
     try {
-      if (isSignUp) {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-        })
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-        if (signUpError) throw signUpError
+      if (signInError) throw signInError
 
-        if (rememberMe) {
-          localStorage.setItem('remembered_email', email)
-        } else {
-          localStorage.removeItem('remembered_email')
-        }
-
-        setLoading(false)
-
-        if (data.session) {
-          navigate('/onboarding')
-        } else {
-          setInfoMessage(t('login.confirm_email_msg'))
-          setIsSignUp(false)
-          setPassword('')
-        }
+      if (rememberMe) {
+        localStorage.setItem('remembered_email', email)
       } else {
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
+        localStorage.removeItem('remembered_email')
+      }
 
-        if (signInError) throw signInError
+      // Sync language settings
+      const { data: profile } = await supabase
+        .from('store_profiles')
+        .select('*')
+        .eq('owner_id', data.user.id)
+        .limit(1)
 
-        if (rememberMe) {
-          localStorage.setItem('remembered_email', email)
-        } else {
-          localStorage.removeItem('remembered_email')
-        }
+      setLoading(false)
 
-        // Sync language settings
-        const { data: profile } = await supabase
-          .from('store_profiles')
-          .select('*')
-          .eq('owner_id', data.user.id)
-          .limit(1)
-
-        setLoading(false)
-
-        if (profile && profile.length > 0) {
-          const profileLang = profile[0].language || 'en'
-          i18n.changeLanguage(profileLang)
-          localStorage.setItem('app_language', profileLang)
-          navigate('/dashboard')
-        } else {
-          navigate('/onboarding')
-        }
+      if (profile && profile.length > 0) {
+        const profileLang = profile[0].language || 'en'
+        i18n.changeLanguage(profileLang)
+        localStorage.setItem('app_language', profileLang)
+        navigate('/dashboard')
+      } else {
+        navigate('/onboarding')
       }
     } catch (err: any) {
       setLoading(false)
@@ -260,7 +234,7 @@ export default function Login() {
         </div>
 
         <h2 className="text-lg font-bold text-center text-indigo-400 border-b border-slate-800 pb-2">
-          {isSignUp ? t('login.title_signup') : t('login.title_signin')}
+          {t('login.title_signin')}
         </h2>
 
         <form onSubmit={handleAuth} className="space-y-4">
@@ -343,7 +317,7 @@ export default function Login() {
               </>
             ) : (
               <>
-                <span>{isSignUp ? t('login.btn_signup') : t('login.btn_signin')}</span>
+                <span>{t('login.btn_signin')}</span>
                 <Sparkles className="w-4 h-4" />
               </>
             )}

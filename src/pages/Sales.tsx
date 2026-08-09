@@ -49,6 +49,18 @@ export default function Sales() {
   const [success, setSuccess] = useState(false)
   const [cartError, setCartError] = useState<string | null>(null)
 
+  // Clients & Price Tiers states
+  const [clients, setClients] = useState<any[]>([])
+  const [selectedClient, setSelectedClient] = useState<any | null>(null)
+
+  // Suspend / Resume on-hold carts
+  const [onHoldCarts, setOnHoldCarts] = useState<{ id: string; timestamp: string; client: any | null; items: any[] }[]>([])
+
+  // Quick Add Custom item modal
+  const [showCustomItemModal, setShowCustomItemModal] = useState(false)
+  const [customItemName, setCustomItemName] = useState('')
+  const [customItemPrice, setCustomItemPrice] = useState('')
+
   // Beep Audio synthesis configuration
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [audioError, setAudioError] = useState<string | null>(null)
@@ -70,6 +82,16 @@ export default function Sales() {
     testAudioSynthesis()
     setupScannerDevices()
   }, [])
+
+  useEffect(() => {
+    if (selectedClient) {
+      setCreditCustomerName(selectedClient.name)
+      setCreditCustomerPhone(selectedClient.phone || '')
+    } else {
+      setCreditCustomerName('')
+      setCreditCustomerPhone('')
+    }
+  }, [selectedClient, showCreditModal])
 
   const fetchInitialData = async () => {
     try {
@@ -98,8 +120,16 @@ export default function Sales() {
       }
 
       const { data: products } = await query
-
       setProductsCache(products || [])
+
+      // Load clients for price tiers and credit checkout
+      const { data: clientsData } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('owner_id', user.id)
+        .order('name', { ascending: true })
+
+      setClients(clientsData || [])
     } catch (e) {
       console.error('Error fetching layout context:', e)
     }
@@ -294,11 +324,93 @@ export default function Sales() {
     setSearchResults(matches)
   }
 
+  // Pricing tier updater
+  const handleClientSelect = (client: any | null) => {
+    setSelectedClient(client)
+    const tier = client ? client.price_tier : 'retail'
+    setCart(prev => prev.map(item => {
+      const prod = productsCache.find(p => p.id === item.id)
+      if (!prod) return item // Custom item fallback
+      let price = parseFloat(prod.price)
+      if (tier === 'wholesale' && prod.wholesale_price) {
+        price = parseFloat(prod.wholesale_price)
+      } else if (tier === 'special' && prod.special_price) {
+        price = parseFloat(prod.special_price)
+      }
+      return { ...item, price }
+    }))
+  }
+
+  // Suspend current cart queue
+  const suspendCart = () => {
+    if (cart.length === 0) return
+    const holdId = `HOLD-${Date.now()}`
+    const timestamp = new Date().toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    setOnHoldCarts(prev => [...prev, {
+      id: holdId,
+      timestamp,
+      client: selectedClient,
+      items: [...cart]
+    }])
+    setCart([])
+    setSelectedClient(null)
+    window.dispatchEvent(new CustomEvent('app-toast', {
+      detail: { message: t('sales.cart_suspended_msg') || 'Cart suspended (Put on hold).', type: 'info' }
+    }))
+  }
+
+  // Resume cart queue
+  const resumeCart = (holdId: string) => {
+    const target = onHoldCarts.find(c => c.id === holdId)
+    if (!target) return
+    setCart(target.items)
+    setSelectedClient(target.client)
+    setOnHoldCarts(prev => prev.filter(c => c.id !== holdId))
+    window.dispatchEvent(new CustomEvent('app-toast', {
+      detail: { message: t('sales.cart_resumed_msg') || 'Cart resumed successfully!', type: 'success' }
+    }))
+  }
+
+  // Add Custom miscellaneous item on-the-fly
+  const quickAddCustomItem = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!customItemName.trim() || !customItemPrice) return
+    
+    const parsedPrice = parseFloat(customItemPrice)
+    if (isNaN(parsedPrice) || parsedPrice <= 0) return
+
+    const customId = `CUSTOM-${Date.now()}`
+    setCart(prev => [...prev, {
+      id: customId,
+      name: customItemName.trim(),
+      price: parsedPrice,
+      quantity: 1,
+      stock: 9999,
+      sku: ''
+    }])
+
+    setCustomItemName('')
+    setCustomItemPrice('')
+    setShowCustomItemModal(false)
+
+    window.dispatchEvent(new CustomEvent('app-toast', {
+      detail: { message: 'Custom miscellaneous item added!', type: 'success' }
+    }))
+  }
+
   const addToCart = (prod: any) => {
     setCartError(null)
     if (prod.stock <= 0) {
       setCartError(`Selected item ${prod.name} has zero available stock in inventory.`)
       return
+    }
+
+    const tier = selectedClient ? selectedClient.price_tier : 'retail'
+    let price = parseFloat(prod.price)
+    if (tier === 'wholesale' && prod.wholesale_price) {
+      price = parseFloat(prod.wholesale_price)
+    } else if (tier === 'special' && prod.special_price) {
+      price = parseFloat(prod.special_price)
     }
 
     setCart(prev => {
@@ -313,10 +425,10 @@ export default function Sales() {
       return [...prev, {
         id: prod.id,
         name: prod.name,
-        price: parseFloat(prod.price),
+        price: price,
         quantity: 1,
         stock: prod.stock,
-        sku: prod.sku
+        sku: prod.sku || ''
       }]
     })
   }
@@ -419,6 +531,20 @@ export default function Sales() {
 
       const totalVal = total
       const depositVal = parseFloat(creditDeposit) || 0
+      const addedDebt = Math.max(0, totalVal - depositVal)
+
+      // Validate credit limit if client is selected
+      if (selectedClient) {
+        const clientDebt = parseFloat(selectedClient.current_debt) || 0
+        const clientLimit = parseFloat(selectedClient.credit_limit) || 0
+        if (clientDebt + addedDebt > clientLimit) {
+          // Block or alert user
+          if (!window.confirm(`Warning: This sale will exceed the client's credit limit of ${currency}${clientLimit.toLocaleString()}. Do you wish to override and proceed?`)) {
+            setCreditLoading(false)
+            return
+          }
+        }
+      }
 
       // 1. Create serialized items & initial payments summary JSON
       const summary = JSON.stringify({
@@ -450,6 +576,17 @@ export default function Sales() {
 
       if (debtErr) throw debtErr
 
+      // 2b. Increment client current debt if existing client is selected
+      if (selectedClient) {
+        const nextDebt = (parseFloat(selectedClient.current_debt) || 0) + addedDebt
+        const { error: clientErr } = await supabase
+          .from('clients')
+          .update({ current_debt: nextDebt })
+          .eq('id', selectedClient.id)
+
+        if (clientErr) throw clientErr
+      }
+
       // 3. Decrement stock inventory quantities
       await Promise.all(cart.map(item => {
         const nextStock = Math.max(0, item.stock - item.quantity)
@@ -465,6 +602,7 @@ export default function Sales() {
       setCreditCustomerName('')
       setCreditCustomerPhone('')
       setCreditDeposit('')
+      setSelectedClient(null)
       setSuccess(true)
       clearCart()
 
@@ -612,20 +750,76 @@ export default function Sales() {
           </div>
 
         </div>
-
         {/* Cart summary right */}
         <div className="glass rounded-xl p-5 shadow-xl border border-slate-900/60 flex flex-col justify-between min-h-[380px] h-fit">
           
           <div className="space-y-4">
+            {/* On hold carts list */}
+            {onHoldCarts.length > 0 && (
+              <div className="bg-indigo-950/20 border border-indigo-500/10 rounded-xl p-2.5 mb-3 text-xs space-y-1.5">
+                <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider block">On-Hold Queues</span>
+                <div className="space-y-1 max-h-[80px] overflow-y-auto">
+                  {onHoldCarts.map(hc => (
+                    <div key={hc.id} className="flex justify-between items-center bg-slate-950/60 border border-slate-900 p-1.5 rounded-lg">
+                      <span className="text-[9px] text-gray-300 font-semibold">{hc.timestamp} ({hc.items.length} items)</span>
+                      <button
+                        onClick={() => resumeCart(hc.id)}
+                        className="bg-indigo-600 hover:bg-indigo-505 text-white text-[9px] px-2 py-0.5 rounded font-bold"
+                      >
+                        Resume
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-between items-center border-b border-slate-850 pb-2.5">
               <h3 className="font-bold text-white text-sm flex items-center gap-1.5">
                 <ShoppingCart className="w-4 h-4 text-indigo-400" /> Checkout Cart
               </h3>
-              {cart.length > 0 && (
-                <button onClick={clearCart} className="text-[10px] text-gray-500 hover:text-rose-400 transition-colors font-semibold">
-                  Clear
+              
+              <div className="flex gap-2 items-center">
+                {cart.length > 0 && (
+                  <>
+                    <button onClick={suspendCart} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold">
+                      Hold
+                    </button>
+                    <span className="text-gray-800 text-[10px]">•</span>
+                  </>
+                )}
+                <button onClick={() => setShowCustomItemModal(true)} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold">
+                  + Add Item
                 </button>
-              )}
+                {cart.length > 0 && (
+                  <>
+                    <span className="text-gray-800 text-[10px]">•</span>
+                    <button onClick={clearCart} className="text-[10px] text-gray-500 hover:text-rose-400 transition-colors font-semibold">
+                      Clear
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Client Selection */}
+            <div className="space-y-1 pb-2 border-b border-slate-850">
+              <label className="text-[9px] text-gray-500 uppercase tracking-wider font-bold block">Client / pricing tier</label>
+              <select
+                value={selectedClient ? selectedClient.id : ''}
+                onChange={(e) => {
+                  const client = clients.find(c => c.id === e.target.value) || null
+                  handleClientSelect(client)
+                }}
+                className="w-full bg-slate-950 border border-slate-850 rounded-lg py-2 px-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500/40"
+              >
+                <option value="">Walk-in Customer (Retail - Détail)</option>
+                {clients.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.price_tier === 'wholesale' ? 'Wholesale' : c.price_tier === 'special' ? 'Special' : 'Retail'})
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Cart list */}
@@ -867,6 +1061,66 @@ export default function Sales() {
                       Save to Ledger <CheckCircle2 className="w-4 h-4" />
                     </>
                   )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Quick Add Custom miscellaneous Item modal */}
+      {showCustomItemModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-850 rounded-2xl p-5 shadow-2xl space-y-4 relative">
+            <button
+              onClick={() => setShowCustomItemModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="font-bold text-white text-sm flex items-center gap-2 border-b border-slate-850 pb-2.5">
+              <Plus className="w-4.5 h-4.5 text-indigo-400" /> Add Miscellaneous Item
+            </h3>
+
+            <form onSubmit={quickAddCustomItem} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="text-gray-400 font-semibold">Item Name</label>
+                <input
+                  type="text"
+                  required
+                  value={customItemName}
+                  onChange={(e) => setCustomItemName(e.target.value)}
+                  placeholder="e.g. Miscellaneous Product"
+                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 font-semibold">Unit Price ({currency})</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={customItemPrice}
+                  onChange={(e) => setCustomItemPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCustomItemModal(false)}
+                  className="flex-1 bg-slate-900 hover:bg-slate-850 text-gray-300 py-2 rounded-lg font-bold min-h-[48px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-505 text-white py-2 rounded-lg font-bold min-h-[48px]"
+                >
+                  Add to Cart
                 </button>
               </div>
             </form>

@@ -24,7 +24,11 @@ const tables = [
   'stock_inputs',
   'daily_summaries',
   'forecasts',
-  'assistant_messages'
+  'assistant_messages',
+  'clients',
+  'delivery_notes',
+  'invoices',
+  'versements'
 ];
 
 async function verify() {
@@ -47,7 +51,7 @@ async function verify() {
 
       if (response.status === 200 || response.status === 204) {
         console.log(`[OK] Table "${table}" is present and accessible.`);
-      } else if (data.code === 'PGRST116' || (data.message && data.message.includes("does not exist"))) {
+      } else if (response.status === 404 || data.code === 'PGRST116' || (data.message && data.message.includes("does not exist"))) {
         console.log(`[FAILED] Table "${table}" does not exist.`);
         allOk = false;
       } else {

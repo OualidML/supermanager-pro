@@ -21,7 +21,8 @@ import {
   Bot,
   Sun,
   Moon,
-  BookOpen
+  BookOpen,
+  Truck
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAccessMode } from '../contexts/AccessModeContext'
@@ -61,7 +62,8 @@ export default function Layout() {
       '/forecast',
       '/settings',
       '/debts',
-      '/sales'
+      '/sales',
+      '/billing'
     ]
     if (accessMode === 'employee' && ownerOnlyPaths.includes(location.pathname)) {
       navigate('/pos', { replace: true })
@@ -327,6 +329,7 @@ export default function Layout() {
 
   const moreItems = [
     { name: t('nav.debts') || 'Credit Ledger', path: '/debts', icon: BookOpen, desc: 'Manage customer tabs and debts' },
+    { name: t('nav.billing') || 'Facturation & BL', path: '/billing', icon: Truck, desc: 'Bons de livraison, transporteurs et facturation' },
     { name: t('nav.expenses'), path: '/expenses', icon: Landmark, desc: 'Log bills & operating costs' },
     { name: t('nav.forecast'), path: '/forecast', icon: BrainCircuit, desc: 'Stock prediction model' },
     { name: t('nav.settings'), path: '/settings', icon: Settings, desc: 'Manage credentials & API' },

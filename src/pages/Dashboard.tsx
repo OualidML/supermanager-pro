@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   TrendingUp,
   Package,
@@ -67,6 +68,8 @@ export default function Dashboard() {
   const [todayExpenses, setTodayExpenses] = useState(0)
   const [todayTransactions, setTodayTransactions] = useState(0)
   const [lowStockCount, setLowStockCount] = useState(0)
+  const [expiredCount, setExpiredCount] = useState(0)
+  const [expiringSoonCount, setExpiringSoonCount] = useState(0)
   const [monthNetProfit, setMonthNetProfit] = useState(0)
 
   // Chart and ranking states
@@ -174,15 +177,29 @@ export default function Dashboard() {
       // Map product unit costs
       const productMap: Record<string, any> = {}
       let lowStock = 0
+      let expired = 0
+      let expiringSoon = 0
+      const today = new Date()
       if (products) {
         products.forEach(p => {
           productMap[p.id] = { ...p, costPrice: 0 }
           if (p.stock <= p.min_stock) {
             lowStock++
           }
+          if (p.expiration_date) {
+            const expDate = new Date(p.expiration_date)
+            const diffDays = Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+            if (diffDays <= 0) {
+              expired++
+            } else if (diffDays <= 30) {
+              expiringSoon++
+            }
+          }
         })
       }
       setLowStockCount(lowStock)
+      setExpiredCount(expired)
+      setExpiringSoonCount(expiringSoon)
 
       if (costLogs) {
         costLogs.forEach(c => {
@@ -376,6 +393,31 @@ export default function Dashboard() {
           </span>
         </div>
       </div>
+
+      {/* Expiration Alerts Banner */}
+      {(expiredCount > 0 || expiringSoonCount > 0) && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center justify-between shadow-xl gap-4">
+          <div className="flex items-center gap-3">
+            <span className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <AlertTriangle className="w-5 h-5" />
+            </span>
+            <div>
+              <h4 className="font-extrabold text-white text-xs">Stock Alerts & Product Expirations</h4>
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                {expiredCount > 0 && `${expiredCount} products expired! `}
+                {expiringSoonCount > 0 && `${expiringSoonCount} products expiring within 30 days. `}
+                Please check your inventory sheet.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/inventory"
+            className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-[10px] px-3.5 py-1.5 rounded-lg active:scale-95 transition-all shadow-md shadow-amber-500/10"
+          >
+            Check
+          </Link>
+        </div>
+      )}
 
       {/* KPI Cards Grid */}
       {loading ? (

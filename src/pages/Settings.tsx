@@ -22,6 +22,13 @@ export default function Settings() {
   const [newPin, setNewPin] = useState('')
   const [pinError, setPinError] = useState<string | null>(null)
 
+  // Account Password update states
+  const [newAccountPassword, setNewAccountPassword] = useState('')
+  const [confirmAccountPassword, setConfirmAccountPassword] = useState('')
+  const [passwordChangeLoading, setPasswordChangeLoading] = useState(false)
+  const [passwordChangeMsg, setPasswordChangeMsg] = useState<string | null>(null)
+  const [passwordChangeErr, setPasswordChangeErr] = useState<string | null>(null)
+
   useEffect(() => {
     const savedName = localStorage.getItem('onboarded_store_name')
     const savedType = localStorage.getItem('onboarded_store_type')
@@ -134,6 +141,41 @@ export default function Settings() {
       }
     } catch (err: any) {
       setPinError(err.message || 'Verification or update failed.')
+    }
+  }
+
+  // Update Account Login Password
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPasswordChangeMsg(null)
+    setPasswordChangeErr(null)
+
+    if (!newAccountPassword || newAccountPassword.length < 6) {
+      setPasswordChangeErr('Le mot de passe doit contenir au moins 6 caractères.')
+      return
+    }
+    if (newAccountPassword !== confirmAccountPassword) {
+      setPasswordChangeErr('Les mots de passe ne correspondent pas.')
+      return
+    }
+
+    setPasswordChangeLoading(true)
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newAccountPassword
+      })
+      if (error) throw error
+
+      setNewAccountPassword('')
+      setConfirmAccountPassword('')
+      setPasswordChangeMsg('Mot de passe mis à jour avec succès!')
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: 'Mot de passe mis à jour avec succès!', type: 'success' }
+      }))
+    } catch (err: any) {
+      setPasswordChangeErr(err.message || 'Échec de la mise à jour du mot de passe.')
+    } finally {
+      setPasswordChangeLoading(false)
     }
   }
 
@@ -440,6 +482,67 @@ export default function Settings() {
                 )}
               </label>
             </div>
+          </div>
+
+          {/* Account Security / Change Password */}
+          <div className="glass rounded-xl p-5 shadow-xl space-y-3.5 border border-slate-900/60">
+            <h3 className="font-bold text-white text-sm flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              Sécurité du Compte (تغيير كلمة المرور)
+            </h3>
+            <p className="text-[10px] text-gray-500 leading-normal">
+              Modifier le mot de passe de connexion du propriétaire du magasin.
+            </p>
+
+            {passwordChangeMsg && (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-2.5 rounded-lg text-xs">
+                {passwordChangeMsg}
+              </div>
+            )}
+
+            {passwordChangeErr && (
+              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-2.5 rounded-lg text-xs">
+                {passwordChangeErr}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdatePassword} className="space-y-2.5 text-xs">
+              <div className="space-y-1">
+                <label className="text-gray-400 font-semibold">Nouveau Mot de Passe (6+ caractères)</label>
+                <input
+                  type="password"
+                  required
+                  value={newAccountPassword}
+                  onChange={(e) => setNewAccountPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white min-h-[38px]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 font-semibold">Confirmer le Mot de Passe</label>
+                <input
+                  type="password"
+                  required
+                  value={confirmAccountPassword}
+                  onChange={(e) => setConfirmAccountPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white min-h-[38px]"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={passwordChangeLoading}
+                className="w-full bg-emerald-600 hover:bg-emerald-505 disabled:opacity-50 text-white font-bold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 min-h-[38px]"
+              >
+                {passwordChangeLoading ? (
+                  <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  'Mettre à jour le mot de passe'
+                )}
+              </button>
+            </form>
           </div>
 
           {/* Reset settings */}
