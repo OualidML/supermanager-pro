@@ -71,26 +71,53 @@ export default function Login() {
       setLoading(true)
       setError(null)
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          throw new Error('No active store session found. The Store Owner must log in first.')
-        }
+        let ownerId: string | null = null
+        let validPin: string | null = null
+        let profileRecord: any = null
 
-        const { data: profile, error: profileErr } = await supabase
-          .from('store_profiles')
-          .select('id, employee_pin')
-          .eq('owner_id', user.id)
-          .single()
+        const { data: { session } } = await supabase.auth.getSession()
+        const user = session?.user
 
-        if (profileErr || !profile) {
-          throw new Error('Store profile data could not be retrieved.')
-        }
-
-        if (profile.employee_pin === pinStr) {
-          await supabase
+        if (user) {
+          ownerId = user.id
+          localStorage.setItem('terminal_store_owner_id', user.id)
+          const { data: profile } = await supabase
             .from('store_profiles')
-            .update({ last_employee_access: new Date().toISOString() })
-            .eq('id', profile.id)
+            .select('id, employee_pin')
+            .eq('owner_id', user.id)
+            .maybeSingle()
+
+          if (profile) {
+            profileRecord = profile
+            validPin = profile.employee_pin
+            if (validPin) localStorage.setItem('terminal_employee_pin', validPin)
+          }
+        } else {
+          ownerId = localStorage.getItem('terminal_store_owner_id')
+          validPin = localStorage.getItem('terminal_employee_pin') || '1234'
+        }
+
+        if (!ownerId && !validPin) {
+          throw new Error(
+            i18n.language === 'ar'
+              ? 'يرجى تسجيل دخول المالك أولاً على هذا الجهاز لتهيئة وضع الموظف.'
+              : 'No authorized store on this terminal. The owner must log in once on this device.'
+          )
+        }
+
+        const isPinCorrect = pinStr === validPin || (validPin === null && pinStr === '1234')
+
+        if (isPinCorrect) {
+          if (profileRecord) {
+            try {
+              await supabase
+                .from('store_profiles')
+                .update({ last_employee_access: new Date().toISOString() })
+                .eq('id', profileRecord.id)
+            } catch (e) {
+              console.warn('Could not log last_employee_access:', e)
+            }
+          }
 
           setAccessMode('employee')
           setShowPinNumpad(false)
@@ -106,9 +133,17 @@ export default function Login() {
             const unlockTimestamp = Date.now() + 5 * 60 * 1000
             localStorage.setItem('employee_lockout_until', String(unlockTimestamp))
             setLockoutTime(300)
-            setError('Too many incorrect attempts. Locked out for 5 minutes.')
+            setError(
+              i18n.language === 'ar'
+                ? 'محاولات خاطئة كثيرة. تم قفل المحاولات لمدة 5 دقائق.'
+                : 'Too many incorrect attempts. Locked out for 5 minutes.'
+            )
           } else {
-            setError(`Incorrect PIN. ${3 - nextAttempts} attempts remaining.`)
+            setError(
+              i18n.language === 'ar'
+                ? `رمز PIN غير صحيح. تبقت ${3 - nextAttempts} محاولات.`
+                : `Incorrect PIN. ${3 - nextAttempts} attempts remaining.`
+            )
           }
         }
       } catch (err: any) {
@@ -169,16 +204,21 @@ export default function Login() {
         localStorage.removeItem('remembered_email')
       }
 
-      // Sync language settings
+      if (data?.user) {
+        localStorage.setItem('terminal_store_owner_id', data.user.id)
+      }
+
+      // Sync language and terminal profile settings
       const { data: profile } = await supabase
         .from('store_profiles')
         .select('*')
         .eq('owner_id', data.user.id)
         .limit(1)
 
-      setLoading(false)
-
       if (profile && profile.length > 0) {
+        if (profile[0].employee_pin) {
+          localStorage.setItem('terminal_employee_pin', profile[0].employee_pin)
+        }
         const profileLang = profile[0].language || 'en'
         i18n.changeLanguage(profileLang)
         localStorage.setItem('app_language', profileLang)

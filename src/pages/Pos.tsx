@@ -95,26 +95,27 @@ export default function Pos() {
 
   const fetchInitialData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const { data: { session } } = await supabase.auth.getSession()
+      const ownerId = session?.user?.id || localStorage.getItem('terminal_store_owner_id')
+      if (!ownerId) return
 
       // Load currency details
       const { data: profile } = await supabase
         .from('store_profiles')
         .select('currency')
-        .eq('owner_id', user.id)
+        .eq('owner_id', ownerId)
         .limit(1)
 
       if (profile && profile.length > 0) {
-        setCurrency(profile[0].currency || '$')
+        setCurrency(profile[0].currency || 'DA')
       }
 
-      // Load products cache for suggestions & search - ONLY show_to_employee = true
+      // Load products cache for suggestions & search (visible to cashier)
       const { data: products } = await supabase
         .from('products')
         .select('*')
-        .eq('owner_id', user.id)
-        .eq('show_to_employee', true)
+        .eq('owner_id', ownerId)
+        .or('show_to_employee.is.null,show_to_employee.eq.true')
 
       setProductsCache(products || [])
 
@@ -122,7 +123,7 @@ export default function Pos() {
       const { data: clientsData } = await supabase
         .from('clients')
         .select('*')
-        .eq('owner_id', user.id)
+        .eq('owner_id', ownerId)
         .order('name', { ascending: true })
 
       setClients(clientsData || [])
