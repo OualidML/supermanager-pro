@@ -17,7 +17,10 @@ import {
   ArrowUpRight,
   Volume2,
   Upload,
-  Eye
+  Download,
+  Eye,
+  Edit3,
+  Trash2
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { BrowserMultiFormatReader } from '@zxing/browser'
@@ -58,6 +61,7 @@ export default function Inventory() {
 
   // Modals state
   const [showAddModal, setShowAddModal] = useState(false)
+  const [editingProductId, setEditingProductId] = useState<string | null>(null)
   const [showRestockModal, setShowRestockModal] = useState(false)
   const [targetProduct, setTargetProduct] = useState<ProductItem | null>(null)
 
@@ -83,6 +87,37 @@ export default function Inventory() {
   const [scanDeviceId, setScanDeviceId] = useState<string | null>(null)
   const [scanDevices, setScanDevices] = useState<MediaDeviceInfo[]>([])
   const [soundEnabled] = useState(true)
+
+  const handleOpenAddModal = () => {
+    setEditingProductId(null)
+    setNewName('')
+    setNewSku('')
+    setNewPrice('')
+    setNewCost('')
+    setNewStock('')
+    setNewMinStock('5')
+    setNewCategory('Peinture & Droguerie')
+    setNewWholesalePrice('')
+    setNewSpecialPrice('')
+    setNewExpirationDate('')
+    setNewWarehouseLocation('')
+    setShowAddModal(true)
+  }
+
+  const handleOpenEditModal = (prod: ProductItem) => {
+    setEditingProductId(prod.id)
+    setNewName(prod.name)
+    setNewSku(prod.sku || '')
+    setNewPrice(prod.price ? prod.price.toString() : '0')
+    setNewCost(prod.costPrice > 0 ? prod.costPrice.toString() : '0')
+    setNewStock(prod.stock ? prod.stock.toString() : '0')
+    setNewMinStock(prod.min_stock ? prod.min_stock.toString() : '5')
+    setNewCategory(prod.category || 'Peinture & Droguerie')
+    setNewWholesalePrice(prod.wholesale_price ? prod.wholesale_price.toString() : '')
+    setNewSpecialPrice(prod.special_price ? prod.special_price.toString() : '')
+    setNewWarehouseLocation(prod.warehouse_location || '')
+    setShowAddModal(true)
+  }
 
   useEffect(() => {
     fetchInventory()
@@ -278,63 +313,104 @@ export default function Inventory() {
     }
   }, [isScanning, scanDeviceId])
 
-  // Save new product record
+  // Save new or edited product record
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault()
     setDbError(null)
 
-    if (!newName || !newPrice || !newCost || !newStock || !newMinStock) return
+    if (!newName.trim()) return
 
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('No user session found.')
 
-      const parsedPrice = parseFloat(newPrice)
-      const parsedCost = parseFloat(newCost)
-      const parsedStock = parseInt(newStock)
-      const parsedMinStock = parseInt(newMinStock)
+      const parsedPrice = parseFloat(newPrice) || 0
+      const parsedCost = parseFloat(newCost) || 0
+      const parsedStock = parseInt(newStock) || 0
+      const parsedMinStock = parseInt(newMinStock) || 5
 
-      // 1. Insert product record
-      const { data: prodData, error: prodErr } = await supabase
-        .from('products')
-        .insert([{
-          owner_id: user.id,
-          name: newName,
-          sku: newSku || null,
-          price: parsedPrice,
-          stock: parsedStock,
-          min_stock: parsedMinStock,
-          category: newCategory,
-          wholesale_price: parseFloat(newWholesalePrice) || null,
-          special_price: parseFloat(newSpecialPrice) || null,
-          expiration_date: newExpirationDate || null,
-          warehouse_location: newWarehouseLocation || null
-        }])
-        .select()
+      if (editingProductId) {
+        // Update existing product
+        const { error: updErr } = await supabase
+          .from('products')
+          .update({
+            name: newName.trim(),
+            sku: newSku.trim() || null,
+            price: parsedPrice,
+            stock: parsedStock,
+            min_stock: parsedMinStock,
+            category: newCategory.trim() || 'General',
+            wholesale_price: parseFloat(newWholesalePrice) || null,
+            special_price: parseFloat(newSpecialPrice) || null,
+            expiration_date: newExpirationDate || null,
+            warehouse_location: newWarehouseLocation.trim() || null
+          })
+          .eq('id', editingProductId)
 
-      if (prodErr) throw prodErr
+        if (updErr) throw updErr
 
-      // 2. Insert cost history in stock_inputs
-      if (prodData && prodData.length > 0) {
-        const { error: costErr } = await supabase
-          .from('stock_inputs')
+        if (parsedCost > 0) {
+          try {
+            await supabase
+              .from('stock_inputs')
+              .insert([{
+                owner_id: user.id,
+                product_id: editingProductId,
+                quantity: parsedStock,
+                cost_price: parsedCost
+              }])
+          } catch (e) {
+            console.warn('Cost log warning:', e)
+          }
+        }
+
+        window.dispatchEvent(new CustomEvent('app-toast', {
+          detail: { message: `Product "${newName}" updated successfully!`, type: 'success' }
+        }))
+      } else {
+        // 1. Insert product record
+        const { data: prodData, error: prodErr } = await supabase
+          .from('products')
           .insert([{
             owner_id: user.id,
-            product_id: prodData[0].id,
-            quantity: parsedStock,
-            cost_price: parsedCost
+            name: newName.trim(),
+            sku: newSku.trim() || null,
+            price: parsedPrice,
+            stock: parsedStock,
+            min_stock: parsedMinStock,
+            category: newCategory.trim() || 'General',
+            wholesale_price: parseFloat(newWholesalePrice) || null,
+            special_price: parseFloat(newSpecialPrice) || null,
+            expiration_date: newExpirationDate || null,
+            warehouse_location: newWarehouseLocation.trim() || null
           }])
+          .select()
 
-        if (costErr) throw costErr
+        if (prodErr) throw prodErr
+
+        // 2. Insert cost history in stock_inputs
+        if (prodData && prodData.length > 0 && parsedCost > 0) {
+          try {
+            await supabase
+              .from('stock_inputs')
+              .insert([{
+                owner_id: user.id,
+                product_id: prodData[0].id,
+                quantity: parsedStock,
+                cost_price: parsedCost
+              }])
+          } catch (e) {
+            console.warn('Cost log warning:', e)
+          }
+        }
+
+        window.dispatchEvent(new CustomEvent('app-toast', {
+          detail: { message: 'Product added successfully!', type: 'success' }
+        }))
       }
 
-      setSuccessMsg('Product added successfully to inventory.')
       setShowAddModal(false)
-
-      // Dispatch Success Toast
-      window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: 'Product added successfully!', type: 'success' }
-      }))
+      setEditingProductId(null)
 
       // Reset form fields
       setNewName('')
@@ -350,10 +426,44 @@ export default function Inventory() {
       setNewWarehouseLocation('')
 
       fetchInventory()
-      setTimeout(() => setSuccessMsg(''), 2500)
     } catch (err: any) {
       setDbError(err.message || 'Failed to save product.')
     }
+  }
+
+  const handleDeleteProduct = async (productId: string, productName: string) => {
+    if (!window.confirm(`Are you sure you want to delete "${productName}"?`)) return
+    try {
+      const { error } = await supabase.from('products').delete().eq('id', productId)
+      if (error) throw error
+      setProducts(prev => prev.filter(p => p.id !== productId))
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: `Product "${productName}" deleted!`, type: 'success' }
+      }))
+    } catch (e: any) {
+      setDbError(e.message || 'Failed to delete product.')
+    }
+  }
+
+  const handleExportCSV = () => {
+    if (products.length === 0) return
+    const csvHeader = 'name,sku,price,cost,stock,min_stock,category,wholesale_price,special_price\n'
+    const csvRows = products.map(p => {
+      const safeName = p.name.replace(/"/g, '""')
+      const safeSku = (p.sku || '').replace(/"/g, '""')
+      const safeCategory = (p.category || 'General').replace(/"/g, '""')
+      return `"${safeName}","${safeSku}",${p.price},${p.costPrice || 0},${p.stock},${p.min_stock},"${safeCategory}",${p.wholesale_price || 0},${p.special_price || 0}`
+    }).join('\n')
+
+    const blob = new Blob([csvHeader + csvRows], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `inventory_catalog_${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   const handleToggleEmployeeVisibility = async (productId: string, currentVal: boolean) => {
@@ -585,8 +695,15 @@ export default function Inventory() {
           <p className="text-xs text-gray-400 font-medium">Add catalog items, monitor low-stock limits, and trace cost margins.</p>
         </div>
 
-        <div className="flex gap-2">
-          <label className="bg-slate-800 hover:bg-slate-750 text-gray-300 font-bold py-2.5 px-4 rounded-xl transition-all shadow-lg border border-slate-700 flex items-center justify-center gap-2 text-xs cursor-pointer min-h-[48px]">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleExportCSV}
+            className="bg-slate-900 border border-slate-800 hover:bg-slate-850 text-gray-300 font-bold py-2.5 px-3.5 rounded-xl transition-all flex items-center justify-center gap-1.5 text-xs min-h-[44px]"
+            title="Download complete catalog CSV to edit in Excel"
+          >
+            <Download className="w-4 h-4 text-emerald-400" /> Export CSV
+          </button>
+          <label className="bg-slate-900 border border-slate-800 hover:bg-slate-850 text-gray-300 font-bold py-2.5 px-3.5 rounded-xl transition-all flex items-center justify-center gap-1.5 text-xs cursor-pointer min-h-[44px]">
             <Upload className="w-4 h-4 text-indigo-400" /> Import CSV
             <input
               type="file"
@@ -596,8 +713,8 @@ export default function Inventory() {
             />
           </label>
           <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-indigo-600 hover:bg-indigo-505 text-white font-bold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-indigo-600/15 flex items-center justify-center gap-2 text-xs min-h-[48px]"
+            onClick={handleOpenAddModal}
+            className="bg-indigo-600 hover:bg-indigo-505 text-white font-bold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-indigo-600/15 flex items-center justify-center gap-1.5 text-xs min-h-[44px]"
           >
             <Plus className="w-4 h-4" /> {t('inventory.btn_add')}
           </button>
@@ -783,15 +900,31 @@ export default function Inventory() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      setTargetProduct(prod)
-                      setShowRestockModal(true)
-                    }}
-                    className="bg-slate-900 border border-slate-800 hover:bg-slate-850 text-white font-bold py-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 text-[10px] min-h-[36px]"
-                  >
-                    <RotateCcw className="w-3 h-3 text-indigo-400" /> Restock
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleOpenEditModal(prod)}
+                      className="bg-indigo-600/10 border border-indigo-500/20 hover:bg-indigo-600/20 text-indigo-400 font-bold py-1.5 px-2.5 rounded-lg transition-colors flex items-center gap-1 text-[10px] min-h-[34px]"
+                      title="Edit product details / تعديل المنتج"
+                    >
+                      <Edit3 className="w-3 h-3" /> Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTargetProduct(prod)
+                        setShowRestockModal(true)
+                      }}
+                      className="bg-slate-900 border border-slate-800 hover:bg-slate-850 text-white font-bold py-1.5 px-2.5 rounded-lg transition-colors flex items-center gap-1 text-[10px] min-h-[34px]"
+                    >
+                      <RotateCcw className="w-3 h-3 text-indigo-400" /> Restock
+                    </button>
+                    <button
+                      onClick={() => handleDeleteProduct(prod.id, prod.name)}
+                      className="bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 font-bold py-1.5 px-2 rounded-lg transition-colors flex items-center justify-center text-[10px] min-h-[34px]"
+                      title="Delete product / حذف المنتج"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Employee POS visibility toggle */}
@@ -825,7 +958,15 @@ export default function Inventory() {
             </button>
 
             <h3 className="font-bold text-white text-sm flex items-center gap-2">
-              <Plus className="w-4.5 h-4.5 text-indigo-400" /> {t('inventory.add_title')}
+              {editingProductId ? (
+                <>
+                  <Edit3 className="w-4.5 h-4.5 text-amber-400" /> Modifier le Produit (تعديل المنتج)
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4.5 h-4.5 text-indigo-400" /> {t('inventory.add_title')}
+                </>
+              )}
             </h3>
 
             <form onSubmit={handleSaveProduct} className="space-y-3.5 text-xs">
@@ -979,7 +1120,7 @@ export default function Inventory() {
                   type="submit"
                   className="flex-1 bg-indigo-600 hover:bg-indigo-505 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 min-h-[48px]"
                 >
-                  Save Product <Sparkles className="w-4 h-4" />
+                  {editingProductId ? 'Enregistrer (حفظ التعديل)' : 'Save Product'} <Sparkles className="w-4 h-4" />
                 </button>
               </div>
             </form>
