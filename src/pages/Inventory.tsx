@@ -635,10 +635,10 @@ export default function Inventory() {
             throw new Error('No valid product rows identified in the CSV file.')
           }
 
-          // 1. Bulk insert products
+          // 1. Bulk upsert products (prevent duplicates)
           const { data: insertedProds, error: prodErr } = await supabase
             .from('products')
-            .insert(productsToInsert)
+            .upsert(productsToInsert, { onConflict: 'owner_id,name' })
             .select()
 
           if (prodErr) throw prodErr
