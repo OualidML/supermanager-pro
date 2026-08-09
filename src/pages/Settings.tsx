@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings as SettingsIcon, Store, ShieldCheck, Database, Save, RotateCcw, Download, Upload, AlertTriangle, X } from 'lucide-react'
+import { Settings as SettingsIcon, Store, ShieldCheck, Database, Save, RotateCcw, Download, Upload, AlertTriangle, X, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useTranslation } from 'react-i18next'
 
@@ -577,8 +577,17 @@ export default function Settings() {
           <div className="glass rounded-xl p-5 shadow-xl space-y-3.5 border border-slate-900/60">
             <h3 className="font-bold text-white text-sm">System Actions</h3>
             <p className="text-[10px] text-gray-500 leading-normal">
-              Reset all wizard cache parameters to initialize the onboarding config parameters from scratch.
+              Manage database resets and clear temporary testing sales or invoices.
             </p>
+
+            <button
+              onClick={handleClearTestSalesAndInvoices}
+              className="w-full bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 text-amber-400 font-bold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 min-h-[38px]"
+              title="Clear all test sales, delivery notes, and invoices (Keeps your 528 products)"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Clear Test Sales & Invoices (تصفير مبيعات وفواتير الاختبار)
+            </button>
+
             <button
               onClick={handleReset}
               className="w-full bg-slate-900 border border-slate-800 hover:bg-slate-850 hover:text-rose-400 text-gray-400 font-bold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5"
