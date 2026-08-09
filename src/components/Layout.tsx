@@ -359,6 +359,38 @@ export default function Layout() {
           </div>
         </div>
 
+        {/* Desktop Navigation Links */}
+        {accessMode !== 'employee' && (
+          <nav className="hidden lg:flex items-center gap-1 bg-slate-900/60 border border-slate-850 p-1 rounded-xl">
+            {[
+              { name: t('nav.dashboard'), path: '/dashboard', icon: LayoutDashboard },
+              { name: t('nav.sales'), path: '/sales', icon: Receipt },
+              { name: t('nav.inventory'), path: '/inventory', icon: Package },
+              { name: t('nav.debts') || 'Credit / الديون', path: '/debts', icon: BookOpen },
+              { name: t('nav.billing') || 'Facturation / الفواتير', path: '/billing', icon: Truck },
+              { name: t('nav.expenses'), path: '/expenses', icon: Landmark },
+              { name: t('nav.reports'), path: '/reports', icon: BarChart3 }
+            ].map((navItem) => {
+              const Icon = navItem.icon
+              const active = isActive(navItem.path)
+              return (
+                <Link
+                  key={navItem.path}
+                  to={navItem.path}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    active
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                      : 'text-gray-400 hover:text-white hover:bg-slate-800/60'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{navItem.name}</span>
+                </Link>
+              )
+            })}
+          </nav>
+        )}
+
         {/* Header Controls: Theme + Language + Settings */}
         <div className="flex items-center gap-2.5">
           
@@ -394,7 +426,7 @@ export default function Layout() {
       </header>
 
       {/* Main Scrollable Outlet Area */}
-      <main className="flex-1 pt-20 px-4 sm:px-6 max-w-4xl mx-auto w-full overflow-y-auto">
+      <main className="flex-1 pt-20 px-4 sm:px-6 max-w-6xl mx-auto w-full overflow-y-auto">
         <Outlet />
       </main>
 
