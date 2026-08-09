@@ -458,8 +458,7 @@ export default function Sales() {
   }
 
   const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0)
-  const tax = subtotal * 0.0825 // 8.25% mock VAT tax
-  const total = subtotal + tax
+  const total = subtotal
 
   // Complete checkout sale
   const handleCheckout = async () => {
@@ -871,17 +870,9 @@ export default function Sales() {
 
           {/* Pricing calculations */}
           <div className="border-t border-slate-850 pt-4 mt-4 space-y-3 text-xs">
-            <div className="flex justify-between items-center text-gray-400">
-              <span>{t('sales.subtotal')}</span>
-              <span className="font-mono text-white">{currency}{subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between items-center text-gray-400">
-              <span>{t('sales.tax')}</span>
-              <span className="font-mono text-white">{currency}{tax.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between items-center border-t border-slate-850 pt-2 text-sm font-extrabold text-white">
+            <div className="flex justify-between items-center text-sm font-extrabold text-white">
               <span>{t('sales.total')}</span>
-              <span className="font-mono text-indigo-400">{currency}{total.toFixed(2)}</span>
+              <span className="font-mono text-indigo-400 text-base">{currency}{total.toFixed(2)}</span>
             </div>
 
             <div className="flex gap-2.5 mt-2">
