@@ -103,44 +103,65 @@ export default function Settings() {
     setPinError(null)
 
     if (newPin.length !== 4 || !/^\d+$/.test(newPin)) {
-      setPinError('PIN must be exactly 4 digits.')
+      setPinError('PIN must be exactly 4 digits (e.g. 1234).')
       return
     }
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user || !user.email) throw new Error('No authenticated user session.')
-
-      // Confirm owner password by re-authenticating
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: ownerPassword
-      })
-
-      if (signInErr) {
-        throw new Error('Incorrect owner password. Verification failed.')
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user || (await supabase.auth.getUser()).data.user
+      
+      if (!user) {
+        throw new Error('No active login session. Please sign in to your account.')
       }
 
-      // Update PIN inside store_profiles
-      if (profileId) {
+      // Upsert PIN into store_profiles
+      const { data: existingProfile } = await supabase
+        .from('store_profiles')
+        .select('id')
+        .eq('owner_id', user.id)
+        .maybeSingle()
+
+      if (existingProfile) {
         const { error: updateErr } = await supabase
           .from('store_profiles')
-          .update({ employee_pin: newPin })
-          .eq('id', profileId)
+          .update({ 
+            employee_pin: newPin,
+            employee_mode_enabled: true 
+          })
+          .eq('id', existingProfile.id)
 
         if (updateErr) throw updateErr
+        setProfileId(existingProfile.id)
+      } else {
+        const { data: newProf, error: insErr } = await supabase
+          .from('store_profiles')
+          .insert([{
+            owner_id: user.id,
+            name: storeName || 'Magasin Peinture & Droguerie',
+            category: 'peinture_droguerie',
+            currency: 'DA',
+            employee_pin: newPin,
+            employee_mode_enabled: true
+          }])
+          .select()
+          .single()
 
-        setEmployeePin(newPin)
-        setShowPinModal(false)
-        setOwnerPassword('')
-        setNewPin('')
-
-        window.dispatchEvent(new CustomEvent('app-toast', {
-          detail: { message: 'Employee access PIN changed successfully!', type: 'success' }
-        }))
+        if (insErr) throw insErr
+        if (newProf) setProfileId(newProf.id)
       }
+
+      setEmployeePin(newPin)
+      setEmployeeModeEnabled(true)
+      setShowPinModal(false)
+      setNewPin('')
+
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: 'Cashier PIN updated successfully!', type: 'success' }
+      }))
     } catch (err: any) {
-      setPinError(err.message || 'Verification or update failed.')
+      console.error('PIN update error:', err)
+      setPinError(err.message || 'Failed to update PIN.')
     }
   }
 
@@ -601,7 +622,7 @@ export default function Settings() {
 
             <form onSubmit={handleChangePin} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="text-gray-400 font-semibold">New 4-Digit PIN</label>
+                <label className="text-gray-400 font-semibold">New 4-Digit PIN (رمز الدخول المكون من 4 أرقام)</label>
                 <input
                   type="text"
                   maxLength={4}
@@ -609,19 +630,7 @@ export default function Settings() {
                   value={newPin}
                   onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
                   placeholder="e.g. 1234"
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px] text-center tracking-widest font-bold text-lg"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-gray-400 font-semibold">Owner Password Confirmation</label>
-                <input
-                  type="password"
-                  required
-                  value={ownerPassword}
-                  onChange={(e) => setOwnerPassword(e.target.value)}
-                  placeholder="Enter your manager password"
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px]"
+                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-2 text-white min-h-[48px] text-center tracking-widest font-bold text-lg focus:outline-none focus:ring-1 focus:ring-amber-500"
                 />
               </div>
 
@@ -630,7 +639,6 @@ export default function Settings() {
                   type="button"
                   onClick={() => {
                     setShowPinModal(false)
-                    setOwnerPassword('')
                     setNewPin('')
                     setPinError(null)
                   }}
