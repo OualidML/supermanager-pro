@@ -582,8 +582,13 @@ export default function Pos() {
     }
   }
 
-  const handleExitEmployeeMode = () => {
+  const handleExitEmployeeMode = async () => {
     setAccessMode('owner')
+    try {
+      await supabase.auth.signOut()
+    } catch (e) {
+      console.warn('Sign out on exit:', e)
+    }
     navigate('/login?exit=true')
   }
 

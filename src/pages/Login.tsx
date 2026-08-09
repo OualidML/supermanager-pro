@@ -160,12 +160,21 @@ export default function Login() {
   }
 
   useEffect(() => {
+    setPassword('')
     const rememberedEmail = localStorage.getItem('remembered_email')
     if (rememberedEmail) {
       setEmail(rememberedEmail)
       setRememberMe(true)
     }
-  }, [])
+
+    if (location.search.includes('exit=true')) {
+      setInfoMessage(
+        i18n.language === 'ar'
+          ? 'تم قفل نقطة البيع. أدخل كلمة مرور المالك للوصول إلى لوحة التحكم والإعدادات.'
+          : 'Terminal locked. Enter Owner password to access manager controls.'
+      )
+    }
+  }, [location.search])
 
   const handleLanguageChange = (newLang: string) => {
     i18n.changeLanguage(newLang)
@@ -271,7 +280,7 @@ export default function Login() {
           {t('login.title_signin')}
         </h2>
 
-        <form onSubmit={handleAuth} className="space-y-4">
+        <form onSubmit={handleAuth} className="space-y-4" autoComplete="off">
           <div className="space-y-1">
             <label className="text-xs font-semibold text-gray-300 uppercase tracking-wider block">
               {t('login.email')}
@@ -283,6 +292,7 @@ export default function Login() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="off"
                 className={`w-full bg-slate-900/60 border border-slate-800 rounded-lg py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-sm ${
                   isRTL ? 'pl-4 pr-10 text-right' : 'pl-10 pr-4 text-left'
                 }`}
@@ -302,6 +312,7 @@ export default function Login() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
                 className={`w-full bg-slate-900/60 border border-slate-800 rounded-lg py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-sm ${
                   isRTL ? 'pl-4 pr-10 text-right' : 'pl-10 pr-4 text-left'
                 }`}
