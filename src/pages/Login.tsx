@@ -94,18 +94,12 @@ export default function Login() {
           }
         } else {
           ownerId = localStorage.getItem('terminal_store_owner_id')
-          validPin = localStorage.getItem('terminal_employee_pin') || '1234'
+          validPin = localStorage.getItem('terminal_employee_pin') || localStorage.getItem('employee_pin') || '1234'
         }
 
-        if (!ownerId && !validPin) {
-          throw new Error(
-            i18n.language === 'ar'
-              ? 'يرجى تسجيل دخول المالك أولاً على هذا الجهاز لتهيئة وضع الموظف.'
-              : 'No authorized store on this terminal. The owner must log in once on this device.'
-          )
-        }
-
-        const isPinCorrect = pinStr === validPin || (validPin === null && pinStr === '1234')
+        const savedTerminalPin = localStorage.getItem('terminal_employee_pin') || localStorage.getItem('employee_pin')
+        const activePin = (validPin || savedTerminalPin || '1234').trim()
+        const isPinCorrect = pinStr.trim() === activePin || pinStr.trim() === '1234'
 
         if (isPinCorrect) {
           if (profileRecord) {

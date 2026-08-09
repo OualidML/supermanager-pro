@@ -151,13 +151,20 @@ export default function Settings() {
         if (newProf) setProfileId(newProf.id)
       }
 
-      setEmployeePin(newPin)
+      // Immediately persist to local terminal storage
+      localStorage.setItem('terminal_employee_pin', newPin.trim())
+      localStorage.setItem('employee_pin', newPin.trim())
+      if (user) {
+        localStorage.setItem('terminal_store_owner_id', user.id)
+      }
+
+      setEmployeePin(newPin.trim())
       setEmployeeModeEnabled(true)
       setShowPinModal(false)
       setNewPin('')
 
       window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: 'Cashier PIN updated successfully!', type: 'success' }
+        detail: { message: `Cashier PIN successfully set to: ${newPin}`, type: 'success' }
       }))
     } catch (err: any) {
       console.error('PIN update error:', err)
@@ -409,8 +416,8 @@ export default function Settings() {
 
               <div className="flex items-center justify-between border-b border-slate-850 pb-3">
                 <div>
-                  <span className="font-bold text-white block">Cashier PIN Code</span>
-                  <span className="text-[10px] text-gray-500 block font-mono">Current PIN: {employeePin ? '••••' : 'Not Set'}</span>
+                  <span className="font-bold text-white block">Cashier PIN Code (رمز الكاشير)</span>
+                  <span className="text-[11px] text-amber-400 block font-mono font-bold">Active PIN: {employeePin || '1234'}</span>
                 </div>
                 <button
                   type="button"
