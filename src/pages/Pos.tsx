@@ -20,6 +20,7 @@ import { BarcodeFormat, DecodeHintType } from '@zxing/library'
 import { useTranslation } from 'react-i18next'
 import { useAccessMode } from '../contexts/AccessModeContext'
 import defaultCatalog from '../data/defaultCatalog.json'
+import { recordOfflineSale, recordOfflineDebt } from '../lib/offlineStorage'
 
 interface CartItem {
   id: string
@@ -445,40 +446,52 @@ export default function Pos() {
     setCartError(null)
 
     try {
+      let isCloudSaved = false
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Unauthenticated session.')
+      if (user) {
+        // Insert employee sales records
+        const salesEntries = cart.map(item => ({
+          owner_id: user.id,
+          product_id: item.id,
+          quantity: item.quantity,
+          price_at_sale: item.price,
+          total_price: item.price * item.quantity,
+          recorded_by: 'employee'
+        }))
 
-      // Insert employee sales records
-      const salesEntries = cart.map(item => ({
-        owner_id: user.id,
-        product_id: item.id,
-        quantity: item.quantity,
-        price_at_sale: item.price,
-        total_price: item.price * item.quantity,
-        recorded_by: 'employee'
-      }))
+        const { error: salesErr } = await supabase
+          .from('sales')
+          .insert(salesEntries)
 
-      const { error: salesErr } = await supabase
-        .from('sales')
-        .insert(salesEntries)
+        if (!salesErr) {
+          isCloudSaved = true
+          // Decrement stock levels in Supabase
+          await Promise.all(cart.map(item => {
+            const nextStock = Math.max(0, item.stock - item.quantity)
+            return supabase
+              .from('products')
+              .update({ stock: nextStock })
+              .eq('id', item.id)
+          }))
+        }
+      }
 
-      if (salesErr) throw salesErr
-
-      // Decrement stock levels
-      await Promise.all(cart.map(item => {
-        const nextStock = Math.max(0, item.stock - item.quantity)
-        return supabase
-          .from('products')
-          .update({ stock: nextStock })
-          .eq('id', item.id)
-      }))
+      // If offline or cloud save wasn't available, save offline locally
+      if (!isCloudSaved) {
+        recordOfflineSale({
+          total_amount: subtotal,
+          payment_method: 'cash',
+          amount_paid: subtotal,
+          recorded_by: 'employee'
+        }, cart)
+      }
 
       setSuccess(true)
       clearCart()
 
       // Toast dispatch
       window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: 'Sale completed successfully by employee!', type: 'success' }
+        detail: { message: isCloudSaved ? 'Vente enregistrée en ligne !' : 'Vente enregistrée en mode Hors-Ligne (Stock déduit localement) !', type: 'success' }
       }))
 
       fetchInitialData()
@@ -488,7 +501,17 @@ export default function Pos() {
       }, 2000)
 
     } catch (e: any) {
-      setCartError(e.message || getTranslation('err_complete_sale'))
+      console.warn('Sale completed with local fallback:', e)
+      recordOfflineSale({
+        total_amount: subtotal,
+        payment_method: 'cash',
+        amount_paid: subtotal,
+        recorded_by: 'employee'
+      }, cart)
+
+      setSuccess(true)
+      clearCart()
+      setTimeout(() => setSuccess(false), 2000)
     } finally {
       setLoading(false)
     }
