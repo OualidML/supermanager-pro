@@ -1,173 +1,168 @@
 using System;
 using System.IO;
 using System.Net;
-using System.Diagnostics;
+using System.Net.Sockets;
+using System.Text;
 using System.Threading;
+using System.Diagnostics;
 
 namespace SuperManagerLauncher
 {
     class Program
     {
-        static HttpListener listener;
-        static string baseDirectory;
+        static TcpListener server;
+        static string distPath;
 
         static void Main(string[] args)
         {
-            baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-            string distPath = Path.Combine(baseDirectory, "dist");
-
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            distPath = Path.Combine(baseDir, "dist");
             if (!Directory.Exists(distPath))
             {
-                distPath = baseDirectory;
+                distPath = baseDir;
             }
 
-            int port = 4173;
-            bool started = false;
+            int port = 5050;
+            bool bound = false;
 
-            while (!started && port < 4200)
+            for (int p = 5050; p <= 5100; p++)
             {
                 try
                 {
-                    listener = new HttpListener();
-                    listener.Prefixes.Add("http://localhost:" + port + "/");
-                    listener.Prefixes.Add("http://127.0.0.1:" + port + "/");
-                    listener.Start();
-                    started = true;
+                    server = new TcpListener(IPAddress.Loopback, p);
+                    server.Start();
+                    port = p;
+                    bound = true;
+                    break;
                 }
                 catch
                 {
-                    port++;
+                    // Try next port
                 }
             }
 
-            if (!started)
-            {
-                // Fallback to simple 127.0.0.1
-                try
-                {
-                    listener = new HttpListener();
-                    listener.Prefixes.Add("http://127.0.0.1:8088/");
-                    listener.Start();
-                    port = 8088;
-                    started = true;
-                }
-                catch
-                {
-                    return;
-                }
-            }
+            if (!bound) return;
 
-            // Launch browser to the app
+            string url = "http://127.0.0.1:" + port + "/";
             try
             {
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = "http://127.0.0.1:" + port + "/",
+                    FileName = url,
                     UseShellExecute = true
                 });
             }
             catch { }
 
-            // Serve incoming HTTP requests
-            ThreadPool.QueueUserWorkItem((o) =>
-            {
-                while (listener != null && listener.IsListening)
-                {
-                    try
-                    {
-                        var context = listener.GetContext();
-                        ThreadPool.QueueUserWorkItem((c) => ProcessRequest((HttpListenerContext)c, distPath), context);
-                    }
-                    catch
-                    {
-                        break;
-                    }
-                }
-            });
-
-            // Keep alive
             while (true)
             {
-                Thread.Sleep(10000);
+                try
+                {
+                    TcpClient client = server.AcceptTcpClient();
+                    ThreadPool.QueueUserWorkItem(HandleClient, client);
+                }
+                catch
+                {
+                    Thread.Sleep(50);
+                }
             }
         }
 
-        static void ProcessRequest(HttpListenerContext context, string distPath)
+        static void HandleClient(object obj)
         {
+            TcpClient client = (TcpClient)obj;
             try
             {
-                string rawPath = context.Request.Url.LocalPath.TrimStart('/');
-                if (string.IsNullOrEmpty(rawPath))
+                using (NetworkStream stream = client.GetStream())
                 {
-                    rawPath = "index.html";
-                }
+                    stream.ReadTimeout = 4000;
+                    stream.WriteTimeout = 10000;
 
-                string filePath = Path.Combine(distPath, rawPath.Replace('/', Path.DirectorySeparatorChar));
+                    byte[] buffer = new byte[4096];
+                    int bytesRead = stream.Read(buffer, 0, buffer.Length);
+                    if (bytesRead <= 0) return;
 
-                // SPA fallback: If file does not exist or has no extension, serve index.html
-                if (!File.Exists(filePath) || !Path.HasExtension(filePath))
-                {
-                    filePath = Path.Combine(distPath, "index.html");
-                }
+                    string requestStr = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    string[] lines = requestStr.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+                    if (lines.Length == 0) return;
 
-                if (File.Exists(filePath))
-                {
-                    byte[] buffer = File.ReadAllBytes(filePath);
-                    context.Response.ContentLength64 = buffer.Length;
+                    string[] requestParts = lines[0].Split(' ');
+                    if (requestParts.Length < 2) return;
 
-                    string ext = Path.GetExtension(filePath).ToLowerInvariant();
-                    switch (ext)
+                    string rawUrl = requestParts[1].Split('?')[0].TrimStart('/');
+                    if (string.IsNullOrEmpty(rawUrl))
                     {
-                        case ".html":
-                            context.Response.ContentType = "text/html; charset=utf-8";
-                            break;
-                        case ".js":
-                            context.Response.ContentType = "application/javascript; charset=utf-8";
-                            break;
-                        case ".css":
-                            context.Response.ContentType = "text/css; charset=utf-8";
-                            break;
-                        case ".json":
-                            context.Response.ContentType = "application/json; charset=utf-8";
-                            break;
-                        case ".png":
-                            context.Response.ContentType = "image/png";
-                            break;
-                        case ".jpg":
-                        case ".jpeg":
-                            context.Response.ContentType = "image/jpeg";
-                            break;
-                        case ".svg":
-                            context.Response.ContentType = "image/svg+xml";
-                            break;
-                        case ".ico":
-                            context.Response.ContentType = "image/x-icon";
-                            break;
-                        case ".woff":
-                        case ".woff2":
-                            context.Response.ContentType = "font/woff2";
-                            break;
-                        default:
-                            context.Response.ContentType = "application/octet-stream";
-                            break;
+                        rawUrl = "index.html";
                     }
 
-                    context.Response.StatusCode = (int)HttpStatusCode.OK;
-                    context.Response.OutputStream.Write(buffer, 0, buffer.Length);
-                }
-                else
-                {
-                    context.Response.StatusCode = (int)HttpStatusCode.NotFound;
+                    string filePath = Path.Combine(distPath, rawUrl.Replace('/', Path.DirectorySeparatorChar));
+
+                    // SPA routing: If file does not exist or has no file extension, serve index.html
+                    if (!File.Exists(filePath) || !Path.HasExtension(filePath))
+                    {
+                        filePath = Path.Combine(distPath, "index.html");
+                    }
+
+                    if (File.Exists(filePath))
+                    {
+                        FileInfo fi = new FileInfo(filePath);
+                        long fileLength = fi.Length;
+                        string contentType = GetContentType(filePath);
+
+                        string header = "HTTP/1.1 200 OK\r\n" +
+                                        "Content-Type: " + contentType + "\r\n" +
+                                        "Content-Length: " + fileLength + "\r\n" +
+                                        "Access-Control-Allow-Origin: *\r\n" +
+                                        "Cache-Control: public, max-age=3600\r\n" +
+                                        "Connection: close\r\n\r\n";
+
+                        byte[] headerBytes = Encoding.UTF8.GetBytes(header);
+                        stream.Write(headerBytes, 0, headerBytes.Length);
+
+                        // Stream file in chunks
+                        using (FileStream fs = File.OpenRead(filePath))
+                        {
+                            byte[] chunk = new byte[65536];
+                            int read;
+                            while ((read = fs.Read(chunk, 0, chunk.Length)) > 0)
+                            {
+                                stream.Write(chunk, 0, read);
+                            }
+                        }
+                        stream.Flush();
+                    }
+                    else
+                    {
+                        string notFound = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        byte[] notFoundBytes = Encoding.UTF8.GetBytes(notFound);
+                        stream.Write(notFoundBytes, 0, notFoundBytes.Length);
+                    }
                 }
             }
             catch { }
             finally
             {
-                try
-                {
-                    context.Response.OutputStream.Close();
-                }
-                catch { }
+                try { client.Close(); } catch { }
+            }
+        }
+
+        static string GetContentType(string path)
+        {
+            string ext = Path.GetExtension(path).ToLowerInvariant();
+            switch (ext)
+            {
+                case ".html": return "text/html; charset=utf-8";
+                case ".js": return "application/javascript; charset=utf-8";
+                case ".css": return "text/css; charset=utf-8";
+                case ".json": return "application/json; charset=utf-8";
+                case ".png": return "image/png";
+                case ".jpg":
+                case ".jpeg": return "image/jpeg";
+                case ".svg": return "image/svg+xml";
+                case ".ico": return "image/x-icon";
+                case ".woff": return "font/woff";
+                case ".woff2": return "font/woff2";
+                default: return "application/octet-stream";
             }
         }
     }
