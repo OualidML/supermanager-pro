@@ -14,6 +14,7 @@ import {
 import { supabase } from '../lib/supabaseClient'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useTranslation } from 'react-i18next'
+import { getOfflineProducts, getOfflineSales } from '../lib/offlineStorage'
 
 // Custom CountUp animation component
 function CountUp({ value, prefix = '', suffix = '', decimals = 0 }: { value: number | string; prefix?: string; suffix?: string; decimals?: number }) {
@@ -339,7 +340,27 @@ export default function Dashboard() {
 
       setLoading(false)
     } catch (e) {
-      console.error('Error fetching dashboard details:', e)
+      console.warn('Network offline, using local offline dashboard data:', e)
+      const offlineProds = getOfflineProducts()
+      const offlineSales = getOfflineSales()
+      const savedCurrency = localStorage.getItem('store_currency') || 'DA'
+      setCurrency(savedCurrency)
+
+      let lowStock = 0
+      offlineProds.forEach(p => {
+        if ((p.stock || 0) <= (p.min_stock || 5)) lowStock++
+      })
+      setLowStockCount(lowStock)
+
+      let rev = 0
+      offlineSales.forEach(s => {
+        rev += parseFloat(s.total_amount) || 0
+      })
+      setTodayRevenue(rev)
+      setTodayTransactions(offlineSales.length)
+      setTodayNetProfit(Math.round(rev * 0.25))
+      setMonthNetProfit(Math.round(rev * 0.25))
+
       setLoading(false)
     }
   }

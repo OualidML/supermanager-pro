@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useTranslation } from 'react-i18next'
+import { getOfflineProducts, getOfflineBLs, getOfflineInvoices, recordOfflineBL, recordOfflineInvoice } from '../lib/offlineStorage'
 
 interface LineItem {
   id: string
@@ -113,7 +114,11 @@ export default function Billing() {
         .select('id, name, price, stock, sku')
         .eq('owner_id', user.id)
 
-      setProductsCache(prods || [])
+      if (prods && prods.length > 0) {
+        setProductsCache(prods)
+      } else {
+        setProductsCache(getOfflineProducts())
+      }
 
       // Load clients
       const { data: cls } = await supabase
@@ -125,28 +130,36 @@ export default function Billing() {
       setClients(cls || [])
 
       // Load BL delivery notes
-      const { data: blData, error: blErr } = await supabase
+      const { data: blData } = await supabase
         .from('delivery_notes')
         .select('*')
         .eq('owner_id', user.id)
         .order('created_at', { ascending: false })
 
-      if (blErr) console.warn('Fetch BL warning:', blErr)
-      setDeliveryNotes(blData || [])
+      if (blData && blData.length > 0) {
+        setDeliveryNotes(blData)
+      } else {
+        setDeliveryNotes(getOfflineBLs())
+      }
 
       // Load Invoices
-      const { data: invData, error: invErr } = await supabase
+      const { data: invData } = await supabase
         .from('invoices')
         .select('*')
         .eq('owner_id', user.id)
         .order('created_at', { ascending: false })
 
-      if (invErr) console.warn('Fetch Invoices warning:', invErr)
-      setInvoices(invData || [])
+      if (invData && invData.length > 0) {
+        setInvoices(invData)
+      } else {
+        setInvoices(getOfflineInvoices())
+      }
 
     } catch (e: any) {
-      console.error('Error fetching billing data:', e)
-      setDbError(e.message || t('errors.network_error'))
+      console.warn('Billing offline fallback activated:', e)
+      setProductsCache(getOfflineProducts())
+      setDeliveryNotes(getOfflineBLs())
+      setInvoices(getOfflineInvoices())
     } finally {
       setLoading(false)
     }
@@ -213,17 +226,42 @@ export default function Billing() {
     setSavingBL(true)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Unauthenticated session.')
-
       const total = formItems.reduce((sum, item) => sum + item.quantity * item.price, 0)
       const paid = parseFloat(formAmountPaid) || 0
       const finalClientName = formClientName.trim() || t('billing.client_default', 'Client de passage')
 
-      const { data, error } = await supabase
-        .from('delivery_notes')
-        .insert([{
-          owner_id: user.id,
+      let savedBLRecord: any = null
+
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data, error } = await supabase
+            .from('delivery_notes')
+            .insert([{
+              owner_id: user.id,
+              client_id: selectedClientId || null,
+              client_name: finalClientName,
+              client_phone: formClientPhone.trim() || null,
+              items_json: formItems,
+              total_amount: total,
+              amount_paid: paid,
+              driver_name: formDriverName.trim() || null,
+              vehicle_plate: formVehiclePlate.trim() || null,
+              destination: formDestination.trim() || null,
+              converted_to_invoice: false
+            }])
+            .select()
+
+          if (!error && data && data.length > 0) {
+            savedBLRecord = data[0]
+          }
+        }
+      } catch (cloudErr) {
+        console.warn('Saving BL in offline mode:', cloudErr)
+      }
+
+      if (!savedBLRecord) {
+        savedBLRecord = recordOfflineBL({
           client_id: selectedClientId || null,
           client_name: finalClientName,
           client_phone: formClientPhone.trim() || null,
@@ -234,10 +272,8 @@ export default function Billing() {
           vehicle_plate: formVehiclePlate.trim() || null,
           destination: formDestination.trim() || null,
           converted_to_invoice: false
-        }])
-        .select()
-
-      if (error) throw error
+        })
+      }
 
       setShowCreateBLModal(false)
       setSelectedClientId('')
@@ -249,12 +285,12 @@ export default function Billing() {
       setFormAmountPaid('')
       setFormItems([])
 
-      if (data && data.length > 0) {
-        setDeliveryNotes(prev => [data[0], ...prev])
-        handlePrintBL(data[0])
+      if (savedBLRecord) {
+        setDeliveryNotes(prev => [savedBLRecord, ...prev])
+        handlePrintBL(savedBLRecord)
       }
 
-      setSuccessMsg(t('billing.new_bl') + ' - OK')
+      setSuccessMsg(t('billing.new_bl') + ' - OK (Mode Hors-Ligne)')
       setTimeout(() => setSuccessMsg(''), 3000)
 
     } catch (err: any) {

@@ -26,6 +26,7 @@ import { supabase } from '../lib/supabaseClient'
 import { BrowserMultiFormatReader } from '@zxing/browser'
 import { BarcodeFormat, DecodeHintType } from '@zxing/library'
 import { useTranslation } from 'react-i18next'
+import { getOfflineProducts, saveOfflineProducts } from '../lib/offlineStorage'
 
 interface ProductItem {
   id: string
@@ -129,39 +130,52 @@ export default function Inventory() {
       setLoading(true)
       setDbError(null)
 
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        setLoading(false)
-        return
+      const savedCurrency = localStorage.getItem('store_currency') || 'DA'
+      setCurrency(savedCurrency)
+
+      let prods: any[] | null = null
+      let costLogs: any[] | null = null
+
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          // Load currency details
+          const { data: profile } = await supabase
+            .from('store_profiles')
+            .select('currency')
+            .eq('owner_id', user.id)
+            .limit(1)
+
+          if (profile && profile.length > 0) {
+            setCurrency(profile[0].currency || 'DA')
+          }
+
+          // Load products list
+          const { data: pData } = await supabase
+            .from('products')
+            .select('*')
+            .eq('owner_id', user.id)
+            .order('name', { ascending: true })
+
+          prods = pData
+
+          // Load cost histories from stock_inputs
+          const { data: cData } = await supabase
+            .from('stock_inputs')
+            .select('*')
+            .eq('owner_id', user.id)
+
+          costLogs = cData
+        }
+      } catch (cloudEx) {
+        console.warn('Supabase offline in Inventory, loading local storage:', cloudEx)
       }
 
-      // Load currency details
-      const { data: profile } = await supabase
-        .from('store_profiles')
-        .select('currency')
-        .eq('owner_id', user.id)
-        .limit(1)
-
-      if (profile && profile.length > 0) {
-        setCurrency(profile[0].currency || '$')
+      if (!prods || prods.length === 0) {
+        prods = getOfflineProducts()
+      } else {
+        saveOfflineProducts(prods)
       }
-
-      // Load products list
-      const { data: prods, error: prodErr } = await supabase
-        .from('products')
-        .select('*')
-        .eq('owner_id', user.id)
-        .order('name', { ascending: true })
-
-      if (prodErr) throw prodErr
-
-      // Load cost histories from stock_inputs
-      const { data: costLogs, error: costErr } = await supabase
-        .from('stock_inputs')
-        .select('*')
-        .eq('owner_id', user.id)
-
-      if (costErr) throw costErr
 
       // Map product latest cost price
       const sortedCosts = [...(costLogs || [])].sort(
@@ -175,16 +189,16 @@ export default function Inventory() {
 
       // Map dynamic metrics
       const mappedProducts: ProductItem[] = (prods || []).map(p => {
-        const cost = productCostMap[p.id] || 0
-        const sellPrice = parseFloat(p.price)
+        const cost = productCostMap[p.id] || p.cost_price || p.costPrice || 0
+        const sellPrice = parseFloat(p.price) || 0
         const profitMargin = sellPrice > 0 ? ((sellPrice - cost) / sellPrice) * 100 : 0
         
         return {
           id: p.id,
           name: p.name,
           sku: p.sku || '',
-          stock: p.stock,
-          min_stock: p.min_stock,
+          stock: p.stock ?? 0,
+          min_stock: p.min_stock ?? 5,
           price: sellPrice,
           wholesale_price: p.wholesale_price ? parseFloat(p.wholesale_price) : null,
           special_price: p.special_price ? parseFloat(p.special_price) : null,
@@ -205,8 +219,27 @@ export default function Inventory() {
 
       setLoading(false)
     } catch (err: any) {
-      console.error(err)
-      setDbError(err.message || 'Error occurred compiling inventory database.')
+      console.warn('Fallback to offline catalog:', err)
+      const offlineProds = getOfflineProducts()
+      const mapped = offlineProds.map(p => ({
+        id: p.id,
+        name: p.name,
+        sku: p.sku || '',
+        stock: p.stock ?? 0,
+        min_stock: p.min_stock ?? 5,
+        price: parseFloat(p.price) || 0,
+        wholesale_price: p.wholesale_price ? parseFloat(p.wholesale_price) : null,
+        special_price: p.special_price ? parseFloat(p.special_price) : null,
+        expiration_date: p.expiration_date || null,
+        warehouse_location: p.warehouse_location || null,
+        category: p.category || 'General',
+        costPrice: p.cost_price || 0,
+        profitMargin: 0,
+        show_to_employee: true
+      }))
+      setProducts(mapped)
+      const uniqueCats = Array.from(new Set(mapped.map(p => p.category)))
+      setCategories(['All', ...uniqueCats])
       setLoading(false)
     }
   }
