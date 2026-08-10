@@ -230,6 +230,7 @@ export default function Login() {
 
       if (data?.user) {
         localStorage.setItem('terminal_store_owner_id', data.user.id)
+        localStorage.setItem('cached_owner_email', email)
       }
 
       // Sync language and terminal profile settings
@@ -252,6 +253,33 @@ export default function Login() {
       }
     } catch (err: any) {
       setLoading(false)
+      const isNetworkError = !navigator.onLine || 
+        err.message?.toLowerCase().includes('failed to fetch') || 
+        err.message?.toLowerCase().includes('network') ||
+        err.message?.toLowerCase().includes('fetch');
+
+      if (isNetworkError) {
+        // Offline Local Login Resilience
+        localStorage.setItem('offline_mode_active', 'true')
+        localStorage.setItem('remembered_email', email)
+        if (!localStorage.getItem('terminal_store_owner_id')) {
+          localStorage.setItem('terminal_store_owner_id', 'OFFLINE_OWNER_ID')
+        }
+        
+        window.dispatchEvent(new CustomEvent('app-toast', {
+          detail: { 
+            message: i18n.language === 'ar' 
+              ? 'تم تسجيل الدخول في وضع عدم الاتصال (بدون إنترنت) بنجاح!' 
+              : 'Connexion en Mode Hors-Ligne (Sans Internet) réussie !', 
+            type: 'success' 
+          }
+        }))
+
+        setAccessMode('owner')
+        navigate('/dashboard')
+        return
+      }
+
       setError(err.message || t('login.err_general'))
     }
   }
