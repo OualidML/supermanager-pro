@@ -124,8 +124,7 @@ export default function Dashboard() {
       // 1. Fetch Auth User details
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        setLoading(false)
-        return
+        throw new Error('Offline user session')
       }
 
       // 2. Fetch Store Profile details
@@ -360,6 +359,31 @@ export default function Dashboard() {
       setTodayTransactions(offlineSales.length)
       setTodayNetProfit(Math.round(rev * 0.25))
       setMonthNetProfit(Math.round(rev * 0.25))
+
+      const chartMap: Record<string, { label: string; profit: number }> = {}
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date()
+        d.setDate(d.getDate() - i)
+        const ymd = d.toISOString().split('T')[0]
+        chartMap[ymd] = {
+          label: d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' }),
+          profit: 0
+        }
+      }
+      offlineSales.forEach(s => {
+        const ymd = (s.created_at || '').split('T')[0]
+        if (chartMap[ymd]) {
+          chartMap[ymd].profit += parseFloat(s.total_amount) || 0
+        }
+      })
+      setChartData(Object.values(chartMap))
+
+      const topProds = offlineProds.slice(0, 5).map(p => ({
+        id: p.id,
+        name: p.name,
+        qty: 0
+      }))
+      setTopProducts(topProds)
 
       setLoading(false)
     }
