@@ -19,6 +19,7 @@ import { BrowserMultiFormatReader } from '@zxing/browser'
 import { BarcodeFormat, DecodeHintType } from '@zxing/library'
 import { useTranslation } from 'react-i18next'
 import { useAccessMode } from '../contexts/AccessModeContext'
+import defaultCatalog from '../data/defaultCatalog.json'
 
 interface CartItem {
   id: string
@@ -117,7 +118,17 @@ export default function Pos() {
         .eq('owner_id', ownerId)
         .or('show_to_employee.is.null,show_to_employee.eq.true')
 
-      setProductsCache(products || [])
+      if (products && products.length > 0) {
+        setProductsCache(products)
+        try { localStorage.setItem('offline_products_cache', JSON.stringify(products)) } catch (e) {}
+      } else {
+        const cached = localStorage.getItem('offline_products_cache')
+        if (cached) {
+          try { setProductsCache(JSON.parse(cached)) } catch (e) { setProductsCache(defaultCatalog as any[]) }
+        } else {
+          setProductsCache(defaultCatalog as any[])
+        }
+      }
 
       // Load clients for price tiers and credit checkout
       const { data: clientsData } = await supabase
@@ -128,7 +139,13 @@ export default function Pos() {
 
       setClients(clientsData || [])
     } catch (e) {
-      console.error('Error fetching POS data:', e)
+      console.warn('Network offline, using local cached catalog in POS:', e)
+      const cached = localStorage.getItem('offline_products_cache')
+      if (cached) {
+        try { setProductsCache(JSON.parse(cached)) } catch (err) { setProductsCache(defaultCatalog as any[]) }
+      } else {
+        setProductsCache(defaultCatalog as any[])
+      }
     }
   }
 
