@@ -353,92 +353,142 @@ export default function Inventory() {
 
     if (!newName.trim()) return
 
+    const parsedPrice = parseFloat(newPrice) || 0
+    const parsedCost = parseFloat(newCost) || 0
+    const parsedStock = parseInt(newStock) || 0
+    const parsedMinStock = parseInt(newMinStock) || 5
+    const parsedWholesale = parseFloat(newWholesalePrice) || null
+    const parsedSpecial = parseFloat(newSpecialPrice) || null
+
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('No user session found.')
+      let savedCloud = false
 
-      const parsedPrice = parseFloat(newPrice) || 0
-      const parsedCost = parseFloat(newCost) || 0
-      const parsedStock = parseInt(newStock) || 0
-      const parsedMinStock = parseInt(newMinStock) || 5
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          if (editingProductId) {
+            // Update existing product
+            const { error: updErr } = await supabase
+              .from('products')
+              .update({
+                name: newName.trim(),
+                sku: newSku.trim() || null,
+                price: parsedPrice,
+                stock: parsedStock,
+                min_stock: parsedMinStock,
+                category: newCategory.trim() || 'General',
+                wholesale_price: parsedWholesale,
+                special_price: parsedSpecial,
+                expiration_date: newExpirationDate || null,
+                warehouse_location: newWarehouseLocation.trim() || null
+              })
+              .eq('id', editingProductId)
 
+            if (!updErr) {
+              savedCloud = true
+              if (parsedCost > 0) {
+                try {
+                  await supabase
+                    .from('stock_inputs')
+                    .insert([{
+                      owner_id: user.id,
+                      product_id: editingProductId,
+                      quantity: parsedStock,
+                      cost_price: parsedCost
+                    }])
+                } catch (e) {}
+              }
+            }
+          } else {
+            // Insert new product
+            const { data: prodData, error: prodErr } = await supabase
+              .from('products')
+              .insert([{
+                owner_id: user.id,
+                name: newName.trim(),
+                sku: newSku.trim() || null,
+                price: parsedPrice,
+                stock: parsedStock,
+                min_stock: parsedMinStock,
+                category: newCategory.trim() || 'General',
+                wholesale_price: parsedWholesale,
+                special_price: parsedSpecial,
+                expiration_date: newExpirationDate || null,
+                warehouse_location: newWarehouseLocation.trim() || null
+              }])
+              .select()
+
+            if (!prodErr && prodData && prodData.length > 0) {
+              savedCloud = true
+              if (parsedCost > 0) {
+                try {
+                  await supabase
+                    .from('stock_inputs')
+                    .insert([{
+                      owner_id: user.id,
+                      product_id: prodData[0].id,
+                      quantity: parsedStock,
+                      cost_price: parsedCost
+                    }])
+                } catch (e) {}
+              }
+            }
+          }
+        }
+      } catch (cloudErr) {
+        console.warn('Saving product offline:', cloudErr)
+      }
+
+      // Offline Local Storage Fallback
       if (editingProductId) {
-        // Update existing product
-        const { error: updErr } = await supabase
-          .from('products')
-          .update({
+        setProducts(prev => {
+          const updated = prev.map(p => p.id === editingProductId ? {
+            ...p,
             name: newName.trim(),
-            sku: newSku.trim() || null,
+            sku: newSku.trim() || '',
             price: parsedPrice,
+            costPrice: parsedCost > 0 ? parsedCost : p.costPrice,
             stock: parsedStock,
             min_stock: parsedMinStock,
             category: newCategory.trim() || 'General',
-            wholesale_price: parseFloat(newWholesalePrice) || null,
-            special_price: parseFloat(newSpecialPrice) || null,
+            wholesale_price: parsedWholesale,
+            special_price: parsedSpecial,
             expiration_date: newExpirationDate || null,
             warehouse_location: newWarehouseLocation.trim() || null
-          })
-          .eq('id', editingProductId)
-
-        if (updErr) throw updErr
-
-        if (parsedCost > 0) {
-          try {
-            await supabase
-              .from('stock_inputs')
-              .insert([{
-                owner_id: user.id,
-                product_id: editingProductId,
-                quantity: parsedStock,
-                cost_price: parsedCost
-              }])
-          } catch (e) {
-            console.warn('Cost log warning:', e)
-          }
-        }
+          } : p)
+          saveOfflineProducts(updated)
+          return updated
+        })
 
         window.dispatchEvent(new CustomEvent('app-toast', {
-          detail: { message: `Product "${newName}" updated successfully!`, type: 'success' }
+          detail: { message: `Produit "${newName}" mis à jour avec succès !`, type: 'success' }
         }))
       } else {
-        // 1. Insert product record
-        const { data: prodData, error: prodErr } = await supabase
-          .from('products')
-          .insert([{
-            owner_id: user.id,
-            name: newName.trim(),
-            sku: newSku.trim() || null,
-            price: parsedPrice,
-            stock: parsedStock,
-            min_stock: parsedMinStock,
-            category: newCategory.trim() || 'General',
-            wholesale_price: parseFloat(newWholesalePrice) || null,
-            special_price: parseFloat(newSpecialPrice) || null,
-            expiration_date: newExpirationDate || null,
-            warehouse_location: newWarehouseLocation.trim() || null
-          }])
-          .select()
-
-        if (prodErr) throw prodErr
-
-        // 2. Insert cost history in stock_inputs
-        if (prodData && prodData.length > 0 && parsedCost > 0) {
-          try {
-            await supabase
-              .from('stock_inputs')
-              .insert([{
-                owner_id: user.id,
-                product_id: prodData[0].id,
-                quantity: parsedStock,
-                cost_price: parsedCost
-              }])
-          } catch (e) {
-            console.warn('Cost log warning:', e)
-          }
+        const newLocalProd: ProductItem = {
+          id: `PROD-${Date.now()}`,
+          name: newName.trim(),
+          sku: newSku.trim() || `SKU-${Date.now().toString().slice(-4)}`,
+          price: parsedPrice,
+          costPrice: parsedCost,
+          stock: parsedStock,
+          min_stock: parsedMinStock,
+          category: newCategory.trim() || 'General',
+          wholesale_price: parsedWholesale,
+          special_price: parsedSpecial,
+          profitMargin: parsedPrice > 0 ? ((parsedPrice - parsedCost) / parsedPrice) * 100 : 0,
+          expiration_date: newExpirationDate || null,
+          warehouse_location: newWarehouseLocation.trim() || null,
+          show_to_employee: true
         }
 
+        setProducts(prev => {
+          const updated = [newLocalProd, ...prev]
+          saveOfflineProducts(updated)
+          return updated
+        })
+
         window.dispatchEvent(new CustomEvent('app-toast', {
-          detail: { message: 'Product added successfully!', type: 'success' }
+          detail: { message: `Produit "${newName}" ajouté avec succès !`, type: 'success' }
         }))
       }
 
@@ -458,23 +508,32 @@ export default function Inventory() {
       setNewExpirationDate('')
       setNewWarehouseLocation('')
 
-      fetchInventory()
     } catch (err: any) {
-      setDbError(err.message || 'Failed to save product.')
+      console.error('Error in handleSaveProduct:', err)
+      setDbError(err.message || 'Impossible d\'enregistrer le produit.')
     }
   }
 
   const handleDeleteProduct = async (productId: string, productName: string) => {
-    if (!window.confirm(`Are you sure you want to delete "${productName}"?`)) return
+    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer "${productName}" ?`)) return
     try {
-      const { error } = await supabase.from('products').delete().eq('id', productId)
-      if (error) throw error
-      setProducts(prev => prev.filter(p => p.id !== productId))
+      try {
+        await supabase.from('products').delete().eq('id', productId)
+      } catch (e) {
+        console.warn('Delete product offline fallback:', e)
+      }
+
+      setProducts(prev => {
+        const updated = prev.filter(p => p.id !== productId)
+        saveOfflineProducts(updated)
+        return updated
+      })
+
       window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: `Product "${productName}" deleted!`, type: 'success' }
+        detail: { message: `Produit "${productName}" supprimé !`, type: 'success' }
       }))
     } catch (e: any) {
-      setDbError(e.message || 'Failed to delete product.')
+      setDbError(e.message || 'Impossible de supprimer le produit.')
     }
   }
 
@@ -503,7 +562,11 @@ export default function Inventory() {
     const newVal = !currentVal
     
     // Optimistic UI update
-    setProducts(prev => prev.map(p => p.id === productId ? { ...p, show_to_employee: newVal } : p))
+    setProducts(prev => {
+      const updated = prev.map(p => p.id === productId ? { ...p, show_to_employee: newVal } : p)
+      saveOfflineProducts(updated)
+      return updated
+    })
 
     try {
       const { error } = await supabase
@@ -514,12 +577,10 @@ export default function Inventory() {
       if (error) throw error
 
       window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: `Product visibility updated!`, type: 'success' }
+        detail: { message: `Visibilité du produit mise à jour !`, type: 'success' }
       }))
     } catch (e: any) {
-      // Revert UI on failure
-      setProducts(prev => prev.map(p => p.id === productId ? { ...p, show_to_employee: currentVal } : p))
-      console.error('Failed to update employee visibility:', e)
+      console.warn('Offline visibility toggle saved locally.')
     }
   }
 
@@ -530,49 +591,67 @@ export default function Inventory() {
 
     if (!targetProduct || !restockQty || !restockCost) return
 
+    const parsedQty = parseInt(restockQty) || 0
+    const parsedCost = parseFloat(restockCost) || 0
+
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('No user session found.')
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          // 1. Log restock details in stock_inputs
+          await supabase
+            .from('stock_inputs')
+            .insert([{
+              owner_id: user.id,
+              product_id: targetProduct.id,
+              quantity: parsedQty,
+              cost_price: parsedCost
+            }])
 
-      const parsedQty = parseInt(restockQty)
-      const parsedCost = parseFloat(restockCost)
+          // 2. Increment stock count in products
+          const nextStock = targetProduct.stock + parsedQty
+          await supabase
+            .from('products')
+            .update({ stock: nextStock })
+            .eq('id', targetProduct.id)
+        }
+      } catch (cloudErr) {
+        console.warn('Restock offline mode:', cloudErr)
+      }
 
-      // 1. Log restock details in stock_inputs
-      const { error: logErr } = await supabase
-        .from('stock_inputs')
-        .insert([{
-          owner_id: user.id,
-          product_id: targetProduct.id,
-          quantity: parsedQty,
-          cost_price: parsedCost
-        }])
+      // Offline Local Storage Update
+      setProducts(prev => {
+        const updated = prev.map(p => {
+          if (p.id === targetProduct.id) {
+            const nextStock = p.stock + parsedQty
+            const nextMargin = p.price > 0 ? ((p.price - parsedCost) / p.price) * 100 : 0
+            return {
+              ...p,
+              stock: nextStock,
+              costPrice: parsedCost,
+              profitMargin: parseFloat(nextMargin.toFixed(1))
+            }
+          }
+          return p
+        })
+        saveOfflineProducts(updated)
+        return updated
+      })
 
-      if (logErr) throw logErr
-
-      // 2. Increment stock count in products
-      const nextStock = targetProduct.stock + parsedQty
-      const { error: prodErr } = await supabase
-        .from('products')
-        .update({ stock: nextStock })
-        .eq('id', targetProduct.id)
-
-      if (prodErr) throw prodErr
-
-      setSuccessMsg(`Restocked ${targetProduct.name} with ${parsedQty} units.`)
+      setSuccessMsg(`Réapprovisionnement de "${targetProduct.name}" (+${parsedQty} unités) effectué !`)
       setShowRestockModal(false)
 
-      // Dispatch Success Toast
       window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: `Restocked ${targetProduct.name} successfully!`, type: 'success' }
+        detail: { message: `Réapprovisionnement de "${targetProduct.name}" réussi !`, type: 'success' }
       }))
+
       setRestockQty('')
       setRestockCost('')
       setTargetProduct(null)
-
-      fetchInventory()
       setTimeout(() => setSuccessMsg(''), 2500)
     } catch (err: any) {
-      setDbError(err.message || 'Failed to log restock details.')
+      console.error('Restock error:', err)
+      setDbError(err.message || 'Impossible d\'enregistrer le réapprovisionnement.')
     }
   }
 
