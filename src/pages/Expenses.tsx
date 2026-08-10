@@ -22,6 +22,7 @@ import {
 import { supabase } from '../lib/supabaseClient'
 import { Treemap, ResponsiveContainer, Tooltip } from 'recharts'
 import { useTranslation } from 'react-i18next'
+import { getOfflineExpenses, recordOfflineExpense, deleteOfflineExpense } from '../lib/offlineStorage'
 
 // Dynamic icon resolver based on category name
 const getCategoryIcon = (category: string) => {
@@ -128,29 +129,41 @@ export default function Expenses() {
       setLoading(true)
       setDbError(null)
 
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        setLoading(false)
-        return
+      const savedCurrency = localStorage.getItem('store_currency') || 'DA'
+      setCurrency(savedCurrency)
+
+      let expList: any[] | null = null
+
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data: profile } = await supabase
+            .from('store_profiles')
+            .select('currency')
+            .eq('owner_id', user.id)
+            .limit(1)
+
+          if (profile && profile.length > 0) {
+            setCurrency(profile[0].currency || 'DA')
+          }
+
+          const { data, error } = await supabase
+            .from('expenses')
+            .select('*')
+            .eq('owner_id', user.id)
+            .order('date', { ascending: false })
+
+          if (!error && data) {
+            expList = data
+          }
+        }
+      } catch (cloudErr) {
+        console.warn('Expenses offline mode:', cloudErr)
       }
 
-      const { data: profile } = await supabase
-        .from('store_profiles')
-        .select('currency')
-        .eq('owner_id', user.id)
-        .limit(1)
-
-      if (profile && profile.length > 0) {
-        setCurrency(profile[0].currency || '$')
+      if (!expList || expList.length === 0) {
+        expList = getOfflineExpenses()
       }
-
-      const { data: expList, error: expErr } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('owner_id', user.id)
-        .order('date', { ascending: false })
-
-      if (expErr) throw expErr
 
       const mappedExpenses = expList || []
       setExpenses(mappedExpenses)
@@ -162,15 +175,16 @@ export default function Expenses() {
       
       const thisMonthTotal = mappedExpenses
         .filter(exp => new Date(exp.date).getTime() >= startOfMonth.getTime())
-        .reduce((sum, exp) => sum + parseFloat(exp.amount), 0)
+        .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0)
 
       setMonthlyTotal(thisMonthTotal)
 
       // Group by category for Treemap
       const groupMap: Record<string, number> = {}
       mappedExpenses.forEach(exp => {
-        const val = parseFloat(exp.amount)
-        groupMap[exp.category] = (groupMap[exp.category] || 0) + val
+        const val = parseFloat(exp.amount) || 0
+        const cat = exp.category || 'Other'
+        groupMap[cat] = (groupMap[cat] || 0) + val
       })
 
       const formattedTreemap = Object.keys(groupMap).map(catName => ({
@@ -181,8 +195,9 @@ export default function Expenses() {
 
       setLoading(false)
     } catch (err: any) {
-      console.error(err)
-      setDbError(err.message || 'Failed to fetch expenses ledger.')
+      console.warn('Fallback to offline expenses:', err)
+      const offlineList = getOfflineExpenses()
+      setExpenses(offlineList)
       setLoading(false)
     }
   }
@@ -192,27 +207,44 @@ export default function Expenses() {
     e.preventDefault()
     setDbError(null)
 
-    if (!description || !amount || !date) return
+    if (!amount || !date) return
+
+    const finalTitle = description.trim() || category || 'Frais généraux'
+    const parsedAmount = parseFloat(amount) || 0
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('No active user session found.')
+      let savedCloud = false
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { error: insertErr } = await supabase
+            .from('expenses')
+            .insert([{
+              owner_id: user.id,
+              title: finalTitle,
+              amount: parsedAmount,
+              category: category,
+              date: date,
+              recurring: recurring,
+              frequency: recurring ? frequency : null
+            }])
 
-      const parsedAmount = parseFloat(amount)
+          if (!insertErr) savedCloud = true
+        }
+      } catch (cloudErr) {
+        console.warn('Saving expense offline:', cloudErr)
+      }
 
-      const { error: insertErr } = await supabase
-        .from('expenses')
-        .insert([{
-          owner_id: user.id,
-          title: description,
+      if (!savedCloud) {
+        recordOfflineExpense({
+          title: finalTitle,
           amount: parsedAmount,
           category: category,
           date: date,
           recurring: recurring,
           frequency: recurring ? frequency : null
-        }])
-
-      if (insertErr) throw insertErr
+        })
+      }
 
       setSuccess(true)
       setDescription('')
@@ -221,13 +253,14 @@ export default function Expenses() {
 
       // Dispatch Global Success Toast
       window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: 'Expense logged successfully!', type: 'success' }
+        detail: { message: 'Dépense enregistrée avec succès !', type: 'success' }
       }))
 
       fetchExpenses()
       setTimeout(() => setSuccess(false), 2000)
     } catch (err: any) {
-      setDbError(err.message || 'An error occurred while logging the expense.')
+      console.error('Error adding expense:', err)
+      setDbError(err.message || 'Une erreur est survenue lors de l\'enregistrement.')
     }
   }
 
@@ -237,57 +270,67 @@ export default function Expenses() {
     if (!expenseToDelete) return
 
     try {
-      // Save details to ref for Undo restore
       lastDeletedRef.current = expenseToDelete
 
-      const { error: delErr } = await supabase
-        .from('expenses')
-        .delete()
-        .eq('id', id)
+      try {
+        await supabase
+          .from('expenses')
+          .delete()
+          .eq('id', id)
+      } catch (e) {
+        console.warn('Cloud delete expense failed, removing offline:', e)
+      }
 
-      if (delErr) throw delErr
-
+      deleteOfflineExpense(id)
       setConfirmDeleteId(null)
       fetchExpenses()
 
-      // Dispatch Success Toast with Undo Action callback
       window.dispatchEvent(new CustomEvent('app-toast', {
         detail: {
-          message: 'Expense deleted successfully.',
+          message: 'Dépense supprimée.',
           type: 'success',
           action: {
-            label: 'Undo',
-            onClick: async () => {
-              const item = lastDeletedRef.current
-              if (!item) return
-
-              const { error: restoreErr } = await supabase
-                .from('expenses')
-                .insert([{
-                  owner_id: item.owner_id,
-                  title: item.title,
-                  amount: item.amount,
-                  category: item.category,
-                  date: item.date,
-                  recurring: item.recurring,
-                  frequency: item.frequency
-                }])
-
-              if (restoreErr) {
-                console.error(restoreErr)
-              } else {
-                fetchExpenses()
-                window.dispatchEvent(new CustomEvent('app-toast', {
-                  detail: { message: 'Expense restored successfully.', type: 'success' }
-                }))
-              }
-            }
+            label: 'Annuler',
+            onClick: () => handleUndoDelete()
           }
         }
       }))
-
     } catch (err: any) {
-      setDbError(err.message || 'Unable to delete expense record.')
+      console.error('Failed to delete expense:', err)
+    }
+  }
+
+  // Handle Undo Delete
+  const handleUndoDelete = async () => {
+    const item = lastDeletedRef.current
+    if (!item) return
+
+    try {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          await supabase
+            .from('expenses')
+            .insert([{
+              owner_id: user.id,
+              title: item.title,
+              amount: item.amount,
+              category: item.category,
+              date: item.date,
+              recurring: item.recurring,
+              frequency: item.frequency
+            }])
+        }
+      } catch (e) {}
+
+      recordOfflineExpense(item)
+      fetchExpenses()
+
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: 'Dépense restaurée.', type: 'success' }
+      }))
+    } catch (err: any) {
+      console.error('Failed to restore expense:', err)
     }
   }
 
@@ -444,13 +487,15 @@ export default function Expenses() {
 
           <form onSubmit={handleAddExpense} className="space-y-4 text-xs">
             <div className="space-y-1">
-              <label className="text-gray-400 font-semibold">{t('expenses.description')}</label>
+              <label className="text-gray-400 font-semibold flex items-center justify-between">
+                <span>{t('expenses.description')}</span>
+                <span className="text-gray-500 font-normal text-[10px]">(Optionnel)</span>
+              </label>
               <input
                 type="text"
-                required
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g. Electricity Bill Jan"
+                placeholder="Ex: Facture d'électricité, transport marchandise..."
                 className="w-full bg-slate-950 border border-slate-855 rounded-lg py-3 px-3 text-white focus:outline-none min-h-[48px]"
               />
             </div>

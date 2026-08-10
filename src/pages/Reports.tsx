@@ -23,6 +23,7 @@ import {
   Legend
 } from 'recharts'
 import { useTranslation } from 'react-i18next'
+import { getOfflineProducts, getOfflineSales, getOfflineExpenses } from '../lib/offlineStorage'
 
 // CountUp animation helper
 function CountUp({ value, prefix = '', suffix = '', decimals = 2 }: { value: number | string; prefix?: string; suffix?: string; decimals?: number }) {
@@ -116,24 +117,8 @@ export default function Reports() {
   const fetchReportData = async () => {
     try {
       setLoading(true)
-      setDbError(null)
-
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        setLoading(false)
-        return
-      }
-
-      // Load currency preference
-      const { data: profile } = await supabase
-        .from('store_profiles')
-        .select('currency')
-        .eq('owner_id', user.id)
-        .limit(1)
-
-      if (profile && profile.length > 0) {
-        setCurrency(profile[0].currency || '$')
-      }
+      const savedCurrency = localStorage.getItem('store_currency') || 'DA'
+      setCurrency(savedCurrency)
 
       // Adjust date strings to ISO bounds
       const isoStart = new Date(startDate)
@@ -141,38 +126,68 @@ export default function Reports() {
       const isoEnd = new Date(endDate)
       isoEnd.setHours(23, 59, 59, 999)
 
-      // 1. Fetch Sales in range
-      const { data: sales, error: salesErr } = await supabase
-        .from('sales')
-        .select('*')
-        .eq('owner_id', user.id)
-        .gte('created_at', isoStart.toISOString())
-        .lte('created_at', isoEnd.toISOString())
+      let sales: any[] | null = null
+      let expenses: any[] | null = null
+      let products: any[] | null = null
+      let costLogs: any[] | null = null
 
-      if (salesErr) throw salesErr
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data: profile } = await supabase
+            .from('store_profiles')
+            .select('currency')
+            .eq('owner_id', user.id)
+            .limit(1)
 
-      // 2. Fetch Expenses in range
-      const { data: expenses, error: expErr } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('owner_id', user.id)
-        .gte('date', startDate)
-        .lte('date', endDate)
+          if (profile && profile.length > 0) {
+            setCurrency(profile[0].currency || 'DA')
+          }
 
-      if (expErr) throw expErr
+          // 1. Fetch Sales in range
+          const { data: sData } = await supabase
+            .from('sales')
+            .select('*')
+            .eq('owner_id', user.id)
+            .gte('created_at', isoStart.toISOString())
+            .lte('created_at', isoEnd.toISOString())
 
-      // 3. Fetch Products and Cost Inputs to calculate COGS
-      const { data: products } = await supabase
-        .from('products')
-        .select('*')
-        .eq('owner_id', user.id)
+          sales = sData
+
+          // 2. Fetch Expenses in range
+          const { data: eData } = await supabase
+            .from('expenses')
+            .select('*')
+            .eq('owner_id', user.id)
+            .gte('date', startDate)
+            .lte('date', endDate)
+
+          expenses = eData
+
+          // 3. Fetch Products and Cost Inputs to calculate COGS
+          const { data: pData } = await supabase
+            .from('products')
+            .select('*')
+            .eq('owner_id', user.id)
+
+          products = pData
+
+          const { data: cData } = await supabase
+            .from('stock_inputs')
+            .select('*')
+            .eq('owner_id', user.id)
+
+          costLogs = cData
+        }
+      } catch (cloudErr) {
+        console.warn('Reports offline fallback:', cloudErr)
+      }
+
+      if (!sales) sales = getOfflineSales()
+      if (!expenses) expenses = getOfflineExpenses()
+      if (!products || products.length === 0) products = getOfflineProducts()
 
       setAllProducts(products || [])
-
-      const { data: costLogs } = await supabase
-        .from('stock_inputs')
-        .select('*')
-        .eq('owner_id', user.id)
 
       const productMap: Record<string, any> = {}
       if (products) {

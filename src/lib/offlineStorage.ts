@@ -139,7 +139,44 @@ export function getOfflineDebts(): any[] {
   }
 }
 
-// 5. AUTO-SYNC ENGINE (When internet returns)
+// 5. OFFLINE EXPENSES
+export function recordOfflineExpense(expense: any) {
+  try {
+    const existing = JSON.parse(localStorage.getItem(OFFLINE_EXPENSES_KEY) || '[]')
+    const record = {
+      ...expense,
+      id: expense.id || `LOCAL-EXP-${Date.now()}`,
+      created_at: new Date().toISOString()
+    }
+    existing.unshift(record)
+    localStorage.setItem(OFFLINE_EXPENSES_KEY, JSON.stringify(existing))
+    return record
+  } catch (e) {
+    console.error('Failed to save offline expense:', e)
+    return expense
+  }
+}
+
+export function getOfflineExpenses(): any[] {
+  try {
+    return JSON.parse(localStorage.getItem(OFFLINE_EXPENSES_KEY) || '[]')
+  } catch (e) {
+    return []
+  }
+}
+
+export function deleteOfflineExpense(id: string) {
+  try {
+    const existing = getOfflineExpenses()
+    const updated = existing.filter((e: any) => e.id !== id)
+    localStorage.setItem(OFFLINE_EXPENSES_KEY, JSON.stringify(updated))
+    return true
+  } catch (e) {
+    return false
+  }
+}
+
+// 6. AUTO-SYNC ENGINE (When internet returns)
 export async function syncPendingOfflineData(): Promise<{ success: boolean; syncedCount: number }> {
   if (!navigator.onLine) return { success: false, syncedCount: 0 }
 
