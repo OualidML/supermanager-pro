@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useTranslation } from 'react-i18next'
+import { getOfflineDebts, recordOfflineDebt } from '../lib/offlineStorage'
 
 interface DebtItem {
   id: string
@@ -149,7 +150,9 @@ export default function Debts() {
 
       setDebts(formattedDebts)
     } catch (err: any) {
-      setDbError(err.message || 'Failed to fetch customer debts ledger.')
+      console.warn('Debts ledger offline fallback:', err)
+      const offlineDebts = getOfflineDebts()
+      setDebts(offlineDebts)
     } finally {
       setLoading(false)
     }

@@ -81,6 +81,8 @@ export default function Billing() {
   const [addItemCustomName, setAddItemCustomName] = useState('')
   const [addItemQuantity, setAddItemQuantity] = useState('1')
   const [addItemPrice, setAddItemPrice] = useState('')
+  const [prodSearchInput, setProdSearchInput] = useState('')
+  const [isSuggestOpen, setIsSuggestOpen] = useState(false)
 
   // Status Alerts
   const [successMsg, setSuccessMsg] = useState('')
@@ -306,48 +308,60 @@ export default function Billing() {
     if (!window.confirm(t('billing.convert_confirm'))) return
     setDbError(null)
 
+    let invRecord: any = null
+
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Unauthenticated.')
+      if (user) {
+        // 1. Insert Invoice in Cloud
+        const { data: invData, error: invErr } = await supabase
+          .from('invoices')
+          .insert([{
+            owner_id: user.id,
+            delivery_note_id: bl.id,
+            client_id: bl.client_id,
+            client_name: bl.client_name,
+            items_json: bl.items_json,
+            total_amount: bl.total_amount
+          }])
+          .select()
 
-      // 1. Insert Invoice
-      const { data: invData, error: invErr } = await supabase
-        .from('invoices')
-        .insert([{
-          owner_id: user.id,
-          delivery_note_id: bl.id,
-          client_id: bl.client_id,
-          client_name: bl.client_name,
-          items_json: bl.items_json,
-          total_amount: bl.total_amount
-        }])
-        .select()
-
-      if (invErr) throw invErr
-
-      // 2. Mark BL as converted
-      await supabase
-        .from('delivery_notes')
-        .update({
-          converted_to_invoice: true,
-          invoice_id: invData[0].id
-        })
-        .eq('id', bl.id)
-
-      setDeliveryNotes(prev => prev.map(item => item.id === bl.id ? { ...item, converted_to_invoice: true, invoice_id: invData[0].id } : item))
-      if (invData && invData.length > 0) {
-        setInvoices(prev => [invData[0], ...prev])
-        setActiveTab('factures')
-        handlePrintInvoice(invData[0])
+        if (!invErr && invData && invData.length > 0) {
+          invRecord = invData[0]
+          // 2. Mark BL as converted in Cloud
+          await supabase
+            .from('delivery_notes')
+            .update({
+              converted_to_invoice: true,
+              invoice_id: invRecord.id
+            })
+            .eq('id', bl.id)
+        }
       }
-
-      setSuccessMsg(t('billing.convert_success'))
-      setTimeout(() => setSuccessMsg(''), 3500)
-
     } catch (err: any) {
-      console.error('Conversion to invoice error:', err)
-      setDbError(err.message || t('billing.err_convert'))
+      console.warn('Converting to invoice in offline mode:', err)
     }
+
+    // Offline Local Invoice Fallback
+    if (!invRecord) {
+      invRecord = recordOfflineInvoice({
+        delivery_note_id: bl.id,
+        client_id: bl.client_id,
+        client_name: bl.client_name,
+        items_json: bl.items_json,
+        total_amount: bl.total_amount
+      })
+    }
+
+    setDeliveryNotes(prev => prev.map(item => item.id === bl.id ? { ...item, converted_to_invoice: true, invoice_id: invRecord.id } : item))
+    if (invRecord) {
+      setInvoices(prev => [invRecord, ...prev])
+      setActiveTab('factures')
+      handlePrintInvoice(invRecord)
+    }
+
+    setSuccessMsg(t('billing.convert_success') || 'Facture générée avec succès !')
+    setTimeout(() => setSuccessMsg(''), 3500)
   }
 
   // Delete BL
@@ -355,10 +369,14 @@ export default function Billing() {
     if (!window.confirm(t('billing.delete_confirm'))) return
     try {
       await supabase.from('delivery_notes').delete().eq('id', id)
-      setDeliveryNotes(prev => prev.filter(b => b.id !== id))
     } catch (e: any) {
-      setDbError(e.message || t('billing.err_delete'))
+      console.warn('Offline delete BL:', e)
     }
+    setDeliveryNotes(prev => {
+      const updated = prev.filter(b => b.id !== id)
+      try { localStorage.setItem('offline_delivery_notes', JSON.stringify(updated)) } catch (e) {}
+      return updated
+    })
   }
 
   // Delete Invoice
@@ -366,10 +384,14 @@ export default function Billing() {
     if (!window.confirm(t('billing.delete_confirm'))) return
     try {
       await supabase.from('invoices').delete().eq('id', id)
-      setInvoices(prev => prev.filter(i => i.id !== id))
     } catch (e: any) {
-      setDbError(e.message || t('billing.err_delete'))
+      console.warn('Offline delete invoice:', e)
     }
+    setInvoices(prev => {
+      const updated = prev.filter(i => i.id !== id)
+      try { localStorage.setItem('offline_invoices', JSON.stringify(updated)) } catch (e) {}
+      return updated
+    })
   }
 
   // Print Clean A4 Delivery Note (BL)
@@ -900,36 +922,87 @@ export default function Billing() {
                   {t('billing.add_items_label')}
                 </label>
                 
-                <div className="flex flex-col sm:flex-row gap-2 items-center bg-slate-950 p-2.5 rounded-xl border border-slate-850">
-                  <select
-                    value={addItemProductId}
-                    onChange={(e) => {
-                      setAddItemProductId(e.target.value)
-                      if (e.target.value) {
-                        const prod = productsCache.find(p => p.id === e.target.value)
-                        if (prod) {
-                          setAddItemPrice(prod.price.toString())
-                          setAddItemCustomName('')
-                        }
-                      }
-                    }}
-                    className="w-full sm:w-1/2 bg-slate-900 border border-slate-800 rounded-lg py-2 px-2.5 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs min-h-[40px]"
-                  >
-                    <option value="">{t('billing.select_product')}</option>
-                    {productsCache.map(p => (
-                      <option key={p.id} value={p.id}>{p.name} ({p.price} {currency})</option>
-                    ))}
-                  </select>
+                <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-slate-950 p-2.5 rounded-xl border border-slate-850">
+                  {/* Live Auto-Suggest Product Search */}
+                  <div className="relative w-full sm:w-1/2">
+                    <div className="relative flex items-center">
+                      <Search className="w-3.5 h-3.5 text-indigo-400 absolute left-3 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={prodSearchInput || addItemCustomName}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setProdSearchInput(val)
+                          setAddItemCustomName(val)
+                          setAddItemProductId('')
+                          setIsSuggestOpen(val.trim().length > 0)
+                        }}
+                        onFocus={() => {
+                          if (prodSearchInput.trim().length > 0) setIsSuggestOpen(true)
+                        }}
+                        placeholder="Rechercher produit (Français / العربية / SKU)..."
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg py-2 pl-8 pr-7 text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs min-h-[40px]"
+                      />
+                      {(prodSearchInput || addItemCustomName) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProdSearchInput('')
+                            setAddItemCustomName('')
+                            setAddItemProductId('')
+                            setAddItemPrice('')
+                            setIsSuggestOpen(false)
+                          }}
+                          className="absolute right-2 text-gray-400 hover:text-white p-1"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
 
-                  {!addItemProductId && (
-                    <input
-                      type="text"
-                      value={addItemCustomName}
-                      onChange={(e) => setAddItemCustomName(e.target.value)}
-                      placeholder={t('billing.custom_name_placeholder')}
-                      className="w-full sm:w-1/2 bg-slate-900 border border-slate-800 rounded-lg py-2 px-2.5 text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs min-h-[40px]"
-                    />
-                  )}
+                    {/* Auto-suggest dropdown overlay */}
+                    {isSuggestOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-750 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-800">
+                        {productsCache
+                          .filter(p => {
+                            const query = prodSearchInput.toLowerCase().trim()
+                            if (!query) return false
+                            return (
+                              p.name.toLowerCase().includes(query) ||
+                              (p.sku && p.sku.toLowerCase().includes(query)) ||
+                              (p.category && p.category.toLowerCase().includes(query))
+                            )
+                          })
+                          .slice(0, 10)
+                          .map(p => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                setAddItemProductId(p.id)
+                                setAddItemCustomName(p.name)
+                                setProdSearchInput(p.name)
+                                setAddItemPrice(p.price.toString())
+                                setIsSuggestOpen(false)
+                              }}
+                              className="w-full text-left p-2.5 hover:bg-indigo-600/20 hover:border-indigo-500/30 transition-colors flex items-center justify-between text-xs group"
+                            >
+                              <div className="truncate mr-2">
+                                <span className="font-bold text-white group-hover:text-indigo-300 block truncate">{p.name}</span>
+                                <span className="text-[10px] text-gray-400 block">{p.category} {p.sku ? `• SKU: ${p.sku}` : ''}</span>
+                              </div>
+                              <span className="font-bold text-amber-400 whitespace-nowrap text-xs">{p.price} {currency}</span>
+                            </button>
+                          ))}
+
+                        {productsCache.filter(p => p.name.toLowerCase().includes(prodSearchInput.toLowerCase())).length === 0 && (
+                          <div className="p-3 text-center text-gray-400 text-xs">
+                            <span>Article personnalisé: <strong>"{prodSearchInput}"</strong></span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="flex gap-2 w-full sm:w-auto">
                     <input
