@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Truck,
   FileText,
@@ -9,11 +9,16 @@ import {
   Trash2,
   Phone,
   AlertCircle,
-  X
+  X,
+  Scan,
+  Volume2,
+  VolumeX
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useTranslation } from 'react-i18next'
 import { getOfflineProducts, getOfflineBLs, getOfflineInvoices, recordOfflineBL, recordOfflineInvoice } from '../lib/offlineStorage'
+import { BrowserMultiFormatReader } from '@zxing/browser'
+import { BarcodeFormat, DecodeHintType } from '@zxing/library'
 
 interface LineItem {
   id: string
@@ -84,9 +89,164 @@ export default function Billing() {
   const [prodSearchInput, setProdSearchInput] = useState('')
   const [isSuggestOpen, setIsSuggestOpen] = useState(false)
 
+  // Barcode Scanner states
+  const [isScanning, setIsScanning] = useState(false)
+  const [scanDeviceId, setScanDeviceId] = useState<string>('')
+  const [scanDevices, setScanDevices] = useState<MediaDeviceInfo[]>([])
+  const [soundEnabled, setSoundEnabled] = useState(true)
+
   // Status Alerts
   const [successMsg, setSuccessMsg] = useState('')
   const [dbError, setDbError] = useState<string | null>(null)
+
+  // Audio Beep generator
+  const playScanBeep = () => {
+    if (!soundEnabled) return
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      if (ctx.state === 'suspended') ctx.resume()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.type = 'triangle'
+      osc.frequency.value = 1000
+      gain.gain.setValueAtTime(0, ctx.currentTime)
+      gain.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 0.05)
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25)
+      osc.start(ctx.currentTime)
+      osc.stop(ctx.currentTime + 0.25)
+    } catch (e) {
+      console.warn('Beep failed:', e)
+    }
+  }
+
+  // Barcode Match Handler
+  const handleBarcodeScanned = (barcode: string) => {
+    playScanBeep()
+    const cleanCode = barcode.trim().toLowerCase()
+    const matched = productsCache.find(p => 
+      (p.sku && p.sku.toLowerCase() === cleanCode) ||
+      (p.id && p.id.toLowerCase() === cleanCode) ||
+      p.name.toLowerCase().includes(cleanCode)
+    )
+
+    if (matched) {
+      setAddItemProductId(matched.id)
+      setAddItemCustomName(matched.name)
+      setProdSearchInput(matched.name)
+      setAddItemPrice(matched.price.toString())
+      setSuccessMsg(`Produit scanné: ${matched.name} (${matched.price} ${currency}) - Stock: ${matched.stock}`)
+      setTimeout(() => setSuccessMsg(''), 4000)
+    } else {
+      setDbError(`Aucun produit trouvé pour le code: "${barcode}"`)
+      setTimeout(() => setDbError(null), 4000)
+    }
+  }
+
+  // Global Physical Barcode Scanner listener (USB / Bluetooth)
+  useEffect(() => {
+    let barcodeBuffer = ''
+    let lastKeyTime = Date.now()
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+
+      const currentTime = Date.now()
+      const timeDiff = currentTime - lastKeyTime
+      lastKeyTime = currentTime
+
+      if (e.key === 'Enter') {
+        if (barcodeBuffer.trim().length >= 2) {
+          e.preventDefault()
+          handleBarcodeScanned(barcodeBuffer.trim())
+          barcodeBuffer = ''
+        }
+        return
+      }
+
+      if (e.key.length === 1) {
+        // Fast burst typing (< 50ms) or when not in text input indicates physical scanner
+        if (timeDiff < 50 || !isInput) {
+          barcodeBuffer += e.key
+        } else {
+          barcodeBuffer = e.key
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [productsCache])
+
+  // Setup camera devices
+  useEffect(() => {
+    const listCameras = async () => {
+      try {
+        const devices = await BrowserMultiFormatReader.listVideoInputDevices()
+        setScanDevices(devices)
+        if (devices.length > 0) {
+          const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rear'))
+          setScanDeviceId(backCamera ? backCamera.deviceId : devices[0].deviceId)
+        }
+      } catch (e) {
+        console.warn('Camera setup warning:', e)
+      }
+    }
+    listCameras()
+  }, [])
+
+  // Camera Barcode Scanning Hook
+  useEffect(() => {
+    if (!isScanning) return
+    const hints = new Map()
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E
+    ])
+    hints.set(DecodeHintType.TRY_HARDER, true)
+
+    const codeReader = new BrowserMultiFormatReader(hints)
+    let active = true
+    const videoElement = document.getElementById('bl-scanner-viewport') as HTMLVideoElement
+    if (!videoElement) return
+
+    const decodeCallback = (result: any) => {
+      if (!active) return
+      if (result) {
+        const barcodeText = result.getText()
+        if (barcodeText) {
+          handleBarcodeScanned(barcodeText)
+          setIsScanning(false)
+          active = false
+        }
+      }
+    }
+
+    let controlsPromise: Promise<any> | null = null
+    const constraints = {
+      video: {
+        deviceId: scanDeviceId ? { exact: scanDeviceId } : undefined,
+        facingMode: 'environment',
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
+      }
+    }
+
+    controlsPromise = codeReader.decodeFromConstraints(constraints, videoElement, decodeCallback)
+
+    return () => {
+      active = false
+      if (controlsPromise) {
+        controlsPromise.then(c => c.stop()).catch(e => console.warn(e))
+      }
+    }
+  }, [isScanning, scanDeviceId])
 
   useEffect(() => {
     fetchInitialData()
@@ -1004,7 +1164,18 @@ export default function Billing() {
                     )}
                   </div>
 
-                  <div className="flex gap-2 w-full sm:w-auto">
+                  <div className="flex gap-2 w-full sm:w-auto items-center">
+                    {/* Scanner Trigger Button */}
+                    <button
+                      type="button"
+                      onClick={() => setIsScanning(true)}
+                      title="Scanner avec caméra"
+                      className="bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 min-h-[40px] whitespace-nowrap active:scale-95 transition-all"
+                    >
+                      <Scan className="w-4 h-4" />
+                      <span className="hidden sm:inline">Scanner</span>
+                    </button>
+
                     <input
                       type="number"
                       min="1"
@@ -1032,6 +1203,60 @@ export default function Billing() {
                     </button>
                   </div>
                 </div>
+
+                {/* Camera Scanner Viewport Modal for BL */}
+                {isScanning && (
+                  <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                    <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4 relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsScanning(false)}
+                        className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+
+                      <div className="space-y-1">
+                        <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                          <Scan className="w-4.5 h-4.5 text-amber-500" /> Scanner Code-Barres (Caméra)
+                        </h3>
+                        <p className="text-[10px] text-gray-400">Positionnez le code-barres de l'article devant la caméra.</p>
+                      </div>
+
+                      <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black border border-slate-800 shadow-inner flex items-center justify-center">
+                        <video
+                          id="bl-scanner-viewport"
+                          className="w-full h-full object-cover"
+                          playsInline
+                        />
+                        <div className="absolute inset-8 border border-amber-500/20 rounded-lg pointer-events-none">
+                          <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-amber-500" />
+                          <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-amber-500" />
+                          <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-amber-500" />
+                          <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-amber-500" />
+                          <div className="absolute top-1/2 left-2 right-2 h-0.5 bg-rose-500 shadow-md shadow-rose-500/40 animate-pulse" />
+                        </div>
+                      </div>
+
+                      {scanDevices.length > 1 && (
+                        <div className="space-y-1 text-xs">
+                          <label className="text-gray-400">Sélectionner Caméra :</label>
+                          <select
+                            value={scanDeviceId}
+                            onChange={(e) => setScanDeviceId(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2 px-2.5 text-white"
+                          >
+                            {scanDevices.map(d => (
+                              <option key={d.deviceId} value={d.deviceId}>
+                                {d.label || `Caméra ${d.deviceId.slice(0, 5)}...`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Items Table in Form */}
                 {formItems.length > 0 && (

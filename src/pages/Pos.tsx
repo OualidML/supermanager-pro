@@ -12,7 +12,9 @@ import {
   Volume2,
   X,
   Sparkles,
-  Receipt
+  Receipt,
+  Printer,
+  FileText
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { BrowserMultiFormatReader } from '@zxing/browser'
@@ -20,7 +22,7 @@ import { BarcodeFormat, DecodeHintType } from '@zxing/library'
 import { useTranslation } from 'react-i18next'
 import { useAccessMode } from '../contexts/AccessModeContext'
 import defaultCatalog from '../data/defaultCatalog.json'
-import { recordOfflineSale, recordOfflineDebt } from '../lib/offlineStorage'
+import { recordOfflineSale, recordOfflineDebt, recordOfflineInvoice } from '../lib/offlineStorage'
 
 interface CartItem {
   id: string
@@ -248,7 +250,12 @@ export default function Pos() {
 
   const handleBarcodeScanned = (barcode: string) => {
     setCartError(null)
-    const product = productsCache.find(p => p.sku === barcode)
+    const cleanCode = barcode.trim().toLowerCase()
+    const product = productsCache.find(p => 
+      (p.sku && p.sku.toLowerCase() === cleanCode) ||
+      (p.id && p.id.toLowerCase() === cleanCode) ||
+      p.name.toLowerCase().includes(cleanCode)
+    )
 
     if (!product) {
       setCartError(getTranslation('err_not_found') + `: ${barcode}`)
@@ -515,6 +522,140 @@ export default function Pos() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Cashier Print Customer Invoice (A4)
+  const handlePrintCustomerInvoice = () => {
+    if (cart.length === 0) return
+
+    const invItems = cart.map(i => ({
+      id: i.id,
+      name: i.name,
+      quantity: i.quantity,
+      price: i.price
+    }))
+
+    const clientName = creditCustomerName.trim() || 'Client de passage'
+    const invId = `FAC-${Date.now().toString().slice(-6)}`
+    const dateStr = new Date().toLocaleDateString('fr-FR')
+
+    // Record offline sale and invoice
+    recordOfflineSale({
+      total_amount: subtotal,
+      payment_method: 'cash',
+      amount_paid: subtotal,
+      recorded_by: 'employee'
+    }, cart)
+
+    recordOfflineInvoice({
+      delivery_note_id: null,
+      client_id: selectedClient ? selectedClient.id : null,
+      client_name: clientName,
+      items_json: invItems,
+      total_amount: subtotal
+    })
+
+    const rows = invItems.map((item, idx) => `
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 10px 12px; font-weight: bold; color: #1e293b; text-align: center;">${idx + 1}</td>
+        <td style="padding: 10px 12px; font-weight: 600; color: #0f172a;">${item.name}</td>
+        <td style="padding: 10px 12px; text-align: center; color: #334155; font-weight: bold;">${item.quantity}</td>
+        <td style="padding: 10px 12px; text-align: right; color: #334155;">${item.price.toFixed(2)} ${currency}</td>
+        <td style="padding: 10px 12px; text-align: right; font-weight: bold; color: #0f172a;">${(item.quantity * item.price).toFixed(2)} ${currency}</td>
+      </tr>
+    `).join('')
+
+    const printHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Facture Client - ${invId}</title>
+        <style>
+          @page { size: A4 portrait; margin: 15mm; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; margin: 0; padding: 0; background: #fff; font-size: 13px; }
+          .header-table { width: 100%; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 20px; }
+          .logo-circle { width: 70px; height: 70px; border-radius: 50%; border: 2px solid #f59e0b; display: inline-flex; align-items: center; justify-content: center; background: #0f172a; color: #f59e0b; font-weight: 900; font-size: 20px; text-align: center; }
+          .store-title { font-size: 20px; font-weight: 900; color: #0f172a; letter-spacing: 0.5px; text-transform: uppercase; }
+          .store-slogan { font-size: 10px; font-weight: 800; color: #b45309; letter-spacing: 2px; text-transform: uppercase; margin-top: 3px; }
+          .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 20px; }
+          .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+          .items-table th { background: #0f172a; color: #ffffff; padding: 10px 12px; font-size: 11px; text-transform: uppercase; font-weight: 700; }
+          .total-card { float: right; width: 260px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; text-align: right; margin-top: 10px; }
+          .total-card .val { font-size: 20px; font-weight: 900; color: #b45309; font-family: monospace; }
+          .footer { margin-top: 50px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 15px; clear: both; }
+        </style>
+      </head>
+      <body>
+        <table class="header-table">
+          <tr>
+            <td style="width: 80px; vertical-align: middle;">
+              <div class="logo-circle">HA</div>
+            </td>
+            <td style="vertical-align: middle;">
+              <div class="store-title">HOUARI ACHAACH</div>
+              <div class="store-slogan">PEINTURE • PVC • OUTILLAGE • QUINCAILLERIE</div>
+              <div style="font-size: 11px; color: #475569; margin-top: 4px;">Tél: 0550 00 00 00 / 0770 00 00 00 • Oran, Algérie</div>
+            </td>
+            <td style="text-align: right; vertical-align: middle;">
+              <div style="font-size: 18px; font-weight: 900; color: #0f172a;">FACTURE CLIENT</div>
+              <div style="font-family: monospace; font-size: 12px; font-weight: bold; color: #b45309; margin-top: 4px;">N° ${invId}</div>
+              <div style="font-size: 11px; color: #475569; margin-top: 2px;">Date: ${dateStr}</div>
+            </td>
+          </tr>
+        </table>
+
+        <div class="meta-box">
+          <table style="width: 100%;">
+            <tr>
+              <td><strong>Client :</strong> ${clientName}</td>
+              <td style="text-align: right;"><strong>Mode de Paiement :</strong> Espèces (Cash)</td>
+            </tr>
+          </table>
+        </div>
+
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th style="width: 40px; text-align: center;">#</th>
+              <th>Désignation de l'Article</th>
+              <th style="width: 60px; text-align: center;">Qté</th>
+              <th style="width: 110px; text-align: right;">Prix Unit.</th>
+              <th style="width: 120px; text-align: right;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+
+        <div class="total-card">
+          <div style="font-size: 12px; color: #475569; margin-bottom: 4px;">NET À PAYER :</div>
+          <div class="val">${subtotal.toFixed(2)} ${currency}</div>
+        </div>
+
+        <div class="footer">
+          Merci pour votre confiance ! • Magasin HOUARI ACHAACH • Peintures & Solutions PVC
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `
+
+    const printWin = window.open('', '_blank', 'width=900,height=750')
+    if (printWin) {
+      printWin.document.open()
+      printWin.document.write(printHtml)
+      printWin.document.close()
+    }
+
+    setSuccess(true)
+    clearCart()
+    setTimeout(() => setSuccess(false), 2000)
   }
 
   // Credit sales checkout for employees
@@ -872,31 +1013,42 @@ export default function Pos() {
             <span className="font-extrabold text-2xl text-amber-500 font-mono">{currency}{subtotal.toFixed(2)}</span>
           </div>
 
-          {/* Checkout Action Buttons Grid (Cash vs Credit) */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Checkout Action Buttons Grid (Cash, Facture A4, Credit) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* On Credit Button */}
             <button
               type="button"
               onClick={() => setShowCreditModal(true)}
               disabled={loading || cart.length === 0}
-              className="h-20 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-slate-950 font-extrabold rounded-2xl transition-all shadow-xl shadow-amber-600/10 flex items-center justify-center gap-2 text-sm select-none active:scale-[0.98] min-h-[48px]"
+              className="h-16 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-slate-950 font-extrabold rounded-2xl transition-all shadow-xl shadow-amber-600/10 flex items-center justify-center gap-2 text-xs select-none active:scale-[0.98] min-h-[48px]"
             >
-              <Receipt className="w-6 h-6 stroke-[2.5]" />
+              <Receipt className="w-5 h-5 stroke-[2.5]" />
               <span className="tracking-wider">{t('debts.btn_on_credit')}</span>
             </button>
 
-            {/* Large COMPLETE SALE Button */}
+            {/* Print Customer Invoice (A4) Button */}
+            <button
+              type="button"
+              onClick={handlePrintCustomerInvoice}
+              disabled={loading || cart.length === 0}
+              className="h-16 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-extrabold rounded-2xl transition-all shadow-xl shadow-indigo-600/10 flex items-center justify-center gap-2 text-xs select-none active:scale-[0.98] min-h-[48px]"
+            >
+              <Printer className="w-5 h-5 stroke-[2.5]" />
+              <span className="tracking-wider">IMPRIMER FACTURE A4</span>
+            </button>
+
+            {/* Large COMPLETE SALE (Cash) Button */}
             <button
               type="button"
               onClick={handleCompleteSale}
               disabled={loading || cart.length === 0}
-              className="h-20 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-extrabold rounded-2xl transition-all shadow-xl shadow-emerald-600/10 flex items-center justify-center gap-2 text-sm select-none active:scale-[0.98] min-h-[48px]"
+              className="h-16 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-extrabold rounded-2xl transition-all shadow-xl shadow-emerald-600/10 flex items-center justify-center gap-2 text-xs select-none active:scale-[0.98] min-h-[48px]"
             >
               {loading ? (
                 <span className="h-6 w-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>
-                  <Check className="w-6 h-6 stroke-[3]" />
+                  <Check className="w-5 h-5 stroke-[3]" />
                   <span className="tracking-wider">{getTranslation('complete_btn')}</span>
                 </>
               )}
